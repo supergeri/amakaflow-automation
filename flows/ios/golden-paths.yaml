@@ -17,7 +17,7 @@ onFlowError:
 - launchApp:
     clearState: true
     stopApp: true
-    env:
+    arguments:
       UITEST_MODE: "true"
       UITEST_AUTH_SECRET: "${UITEST_AUTH_SECRET}"
       UITEST_USER_ID: "${UITEST_USER_ID:-test-user-123}"
@@ -25,10 +25,7 @@ onFlowError:
       UITEST_FIXTURES: "amrap_10min,emom_strength,strength_block_w1"
       UITEST_SKIP_ONBOARDING: "true"
 
-- extendedWaitUntil:
-    visible:
-      id: "home_screen"
-    timeout: 15000
+- wait: 10000
 
 - assertVisible:
     id: "home_screen"
@@ -46,11 +43,6 @@ onFlowError:
 - tapOn:
     id: "workouts_tab"
     retryTapIfNoChange: true
-
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 5000
 
 - assertVisible:
     id: "workouts_screen"
@@ -78,11 +70,6 @@ onFlowError:
     id: "voice_workout_button"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "voice_recording_view"
-    timeout: 5000
-
 - assertVisible:
     id: "voice_recording_view"
 
@@ -105,11 +92,6 @@ onFlowError:
 - tapOn:
     id: "history_tab"
     retryTapIfNoChange: true
-
-- extendedWaitUntil:
-    visible:
-      id: "history_screen"
-    timeout: 5000
 
 - assertVisible:
     id: "history_screen"
@@ -136,11 +118,6 @@ onFlowError:
     id: "settings_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "settings_screen"
-    timeout: 5000
-
 - assertVisible:
     id: "settings_screen"
 
@@ -151,10 +128,8 @@ onFlowError:
     text: "Voice"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "voice_settings_screen"
-    timeout: 5000
+- assertVisible:
+    id: "voice_settings_screen"
 
 - takeScreenshot: artifacts/screenshots/ios-golden-09-voice-settings
 
@@ -170,10 +145,8 @@ onFlowError:
     id: "home_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "home_screen"
-    timeout: 5000
+- assertVisible:
+    id: "home_screen"
 
 - takeScreenshot: artifacts/screenshots/ios-golden-10-complete
 
