@@ -14,7 +14,7 @@ onFlowError:
 - launchApp:
     clearState: true
     stopApp: true
-    env:
+    arguments:
       UITEST_MODE: "true"
       UITEST_AUTH_SECRET: "${UITEST_AUTH_SECRET}"
       UITEST_USER_ID: "fixture-test-user"
@@ -23,20 +23,17 @@ onFlowError:
       UITEST_SKIP_ONBOARDING: "true"
 
 # Wait for home screen
-- extendedWaitUntil:
-    visible:
-      id: "home_screen"
-    timeout: 15000
+- wait: 10000
+- assertVisible:
+    id: "home_screen"
 
 # Navigate to workouts tab
 - tapOn:
     id: "workouts_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 5000
+- assertVisible:
+    id: "workouts_screen"
 
 # ============================================
 # STEP 1: Open workout detail
@@ -46,10 +43,8 @@ onFlowError:
     id: "workout_card_0"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workout_detail_screen"
-    timeout: 5000
+- assertVisible:
+    id: "workout_detail_screen"
 
 - assertVisible:
     text: "Strength Block W1D1"
@@ -65,10 +60,8 @@ onFlowError:
     retryTapIfNoChange: true
 
 # Device selection sheet - select Phone Only
-- extendedWaitUntil:
-    visible:
-      text: "Start Workout"
-    timeout: 5000
+- assertVisible:
+    text: "Start Workout"
 
 - tapOn:
     id: "device_option_phone-only"
@@ -78,11 +71,7 @@ onFlowError:
 # STEP 3: Workout player running
 # ============================================
 
-- extendedWaitUntil:
-    visible:
-      id: "workout_player_screen"
-    timeout: 10000
-
+- wait: 5000
 - assertVisible:
     id: "workout_player_screen"
 
@@ -99,10 +88,8 @@ onFlowError:
     id: "CloseWorkoutButton"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      text: "End Workout?"
-    timeout: 5000
+- assertVisible:
+    text: "End Workout?"
 
 - tapOn:
     text: "Save & End"
@@ -112,10 +99,9 @@ onFlowError:
 # STEP 5: Completion screen
 # ============================================
 
-- extendedWaitUntil:
-    visible:
-      id: "workout_completion_screen"
-    timeout: 10000
+- wait: 5000
+- assertVisible:
+    id: "workout_completion_screen"
 
 - assertVisible:
     text: "Workout Complete!"
@@ -130,10 +116,9 @@ onFlowError:
     id: "completion_done_button"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 10000
+- wait: 5000
+- assertVisible:
+    id: "workouts_screen"
 
 - takeScreenshot: artifacts/screenshots/ios-workout-complete-strength-04-done
 
