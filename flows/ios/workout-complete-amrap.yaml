@@ -17,7 +17,7 @@ onFlowError:
 - launchApp:
     clearState: true
     stopApp: true
-    env:
+    arguments:
       UITEST_MODE: "true"
       UITEST_AUTH_SECRET: "${UITEST_AUTH_SECRET}"
       UITEST_USER_ID: "fixture-test-user"
@@ -26,20 +26,17 @@ onFlowError:
       UITEST_SKIP_ONBOARDING: "true"
 
 # Wait for home screen
-- extendedWaitUntil:
-    visible:
-      id: "home_screen"
-    timeout: 15000
+- wait: 10000
+- assertVisible:
+    id: "home_screen"
 
 # Navigate to workouts tab
 - tapOn:
     id: "workouts_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 5000
+- assertVisible:
+    id: "workouts_screen"
 
 # ============================================
 # STEP 1: Open workout detail
@@ -49,10 +46,8 @@ onFlowError:
     id: "workout_card_0"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workout_detail_screen"
-    timeout: 5000
+- assertVisible:
+    id: "workout_detail_screen"
 
 - assertVisible:
     text: "AMRAP Test - 10 min"
@@ -68,10 +63,8 @@ onFlowError:
     retryTapIfNoChange: true
 
 # Device selection sheet appears - select Phone Only
-- extendedWaitUntil:
-    visible:
-      text: "Start Workout"
-    timeout: 5000
+- assertVisible:
+    text: "Start Workout"
 
 - takeScreenshot: artifacts/screenshots/ios-workout-complete-amrap-02-device-sheet
 
@@ -83,11 +76,7 @@ onFlowError:
 # STEP 3: Workout player running
 # ============================================
 
-- extendedWaitUntil:
-    visible:
-      id: "workout_player_screen"
-    timeout: 10000
-
+- wait: 5000
 - assertVisible:
     id: "workout_player_screen"
 
@@ -107,10 +96,8 @@ onFlowError:
     retryTapIfNoChange: true
 
 # Wait for end confirmation dialog
-- extendedWaitUntil:
-    visible:
-      text: "End Workout?"
-    timeout: 5000
+- assertVisible:
+    text: "End Workout?"
 
 - takeScreenshot: artifacts/screenshots/ios-workout-complete-amrap-05-end-dialog
 
@@ -123,11 +110,7 @@ onFlowError:
 # STEP 5: Completion screen
 # ============================================
 
-- extendedWaitUntil:
-    visible:
-      id: "workout_completion_screen"
-    timeout: 10000
-
+- wait: 5000
 - assertVisible:
     id: "workout_completion_screen"
 - assertVisible:
@@ -144,10 +127,9 @@ onFlowError:
     retryTapIfNoChange: true
 
 # Should return to workout detail or workouts list
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 10000
+- wait: 5000
+- assertVisible:
+    id: "workouts_screen"
 
 - takeScreenshot: artifacts/screenshots/ios-workout-complete-amrap-07-done
 

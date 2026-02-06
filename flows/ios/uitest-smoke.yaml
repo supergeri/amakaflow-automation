@@ -18,7 +18,7 @@ onFlowError:
 - launchApp:
     clearState: true
     stopApp: true
-    env:
+    arguments:
       UITEST_MODE: "true"
       UITEST_AUTH_SECRET: "${UITEST_AUTH_SECRET}"
       UITEST_USER_ID: "${UITEST_USER_ID:-test-user-123}"
@@ -30,10 +30,7 @@ onFlowError:
 # ASSERT: Auth was bypassed - home screen visible (not PairingView)
 # ============================================
 
-- extendedWaitUntil:
-    visible:
-      id: "home_screen"
-    timeout: 15000
+- wait: 10000
 
 - assertVisible:
     id: "home_screen"
@@ -53,11 +50,6 @@ onFlowError:
     id: "workouts_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 5000
-
 - assertVisible:
     id: "workouts_screen"
 
@@ -76,11 +68,6 @@ onFlowError:
     id: "settings_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "settings_screen"
-    timeout: 5000
-
 - assertVisible:
     id: "settings_screen"
 
@@ -89,10 +76,8 @@ onFlowError:
     id: "home_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "home_screen"
-    timeout: 5000
+- assertVisible:
+    id: "home_screen"
 
 - takeScreenshot: artifacts/screenshots/ios-uitest-smoke-03-complete
 

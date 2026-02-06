@@ -14,7 +14,7 @@ onFlowError:
 - launchApp:
     clearState: true
     stopApp: true
-    env:
+    arguments:
       UITEST_MODE: "true"
       UITEST_AUTH_SECRET: "${UITEST_AUTH_SECRET}"
       UITEST_USER_ID: "fixture-test-user"
@@ -23,20 +23,17 @@ onFlowError:
       UITEST_SKIP_ONBOARDING: "true"
 
 # Wait for home screen
-- extendedWaitUntil:
-    visible:
-      id: "home_screen"
-    timeout: 15000
+- wait: 10000
+- assertVisible:
+    id: "home_screen"
 
 # Navigate to workouts tab
 - tapOn:
     id: "workouts_tab"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 5000
+- assertVisible:
+    id: "workouts_screen"
 
 # ============================================
 # DETAIL 1: Tap first workout (AMRAP)
@@ -45,11 +42,6 @@ onFlowError:
 - tapOn:
     id: "workout_card_0"
     retryTapIfNoChange: true
-
-- extendedWaitUntil:
-    visible:
-      id: "workout_detail_screen"
-    timeout: 5000
 
 - assertVisible:
     id: "workout_detail_screen"
@@ -76,10 +68,8 @@ onFlowError:
     to: "50%, 90%"
 
 # Wait for detail to dismiss
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 5000
+- assertVisible:
+    id: "workouts_screen"
 
 # ============================================
 # DETAIL 2: Tap second workout (Strength)
@@ -88,11 +78,6 @@ onFlowError:
 - tapOn:
     id: "workout_card_1"
     retryTapIfNoChange: true
-
-- extendedWaitUntil:
-    visible:
-      id: "workout_detail_screen"
-    timeout: 5000
 
 - assertVisible:
     id: "workout_detail_screen"
@@ -105,10 +90,8 @@ onFlowError:
     from: "50%, 10%"
     to: "50%, 90%"
 
-- extendedWaitUntil:
-    visible:
-      id: "workouts_screen"
-    timeout: 5000
+- assertVisible:
+    id: "workouts_screen"
 
 - takeScreenshot: artifacts/screenshots/ios-workout-detail-04-complete
 
