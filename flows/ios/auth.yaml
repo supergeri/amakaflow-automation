@@ -33,10 +33,9 @@ env:
 
 # Wait for login screen or home screen
 # (Home screen means user is already logged in)
-- extendedWaitUntil:
-    visible:
-      id: "login_screen"
-    timeout: 10000
+- wait: 5000
+- assertVisible:
+    id: "login_screen"
     optional: true
 
 - takeScreenshot: artifacts/screenshots/ios-auth-01-start
@@ -67,10 +66,9 @@ env:
           retryTapIfNoChange: true
 
       # Wait for home screen after login
-      - extendedWaitUntil:
-          visible:
-            id: "home_screen"
-          timeout: 15000
+      - wait: 10000
+      - assertVisible:
+          id: "home_screen"
 
       - takeScreenshot: artifacts/screenshots/ios-auth-04-logged-in
 
