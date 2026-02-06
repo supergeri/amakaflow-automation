@@ -10,10 +10,16 @@ onFlowError:
 
 ---
 
-# Launch the app with clean state for isolation
+# Launch the app with clean state and UITEST env vars for auth bypass
 - launchApp:
     clearState: true
     stopApp: true
+    env:
+      UITEST_MODE: "true"
+      UITEST_AUTH_SECRET: "${UITEST_AUTH_SECRET}"
+      UITEST_USER_ID: "${UITEST_USER_ID:-test-user-123}"
+      UITEST_USE_FIXTURES: "true"
+      UITEST_SKIP_ONBOARDING: "true"
 
 # Wait for app to fully load - use specific element, not wildcard
 - extendedWaitUntil:

@@ -1,0 +1,106 @@
+# iOS UITEST Smoke Test Flow
+# Validates that UITEST_* environment variables correctly bypass auth
+# and load fixture data for deterministic Maestro tests.
+#
+# Run:
+#   UITEST_AUTH_SECRET="e2e-test-secret-dev-only" \
+#   UITEST_USER_ID="user_37lZCcU9AJ9b7MX2H71dZ2CuX2u" \
+#   maestro test flows/ios/uitest-smoke.yaml
+
+appId: com.amakaflow.app
+
+onFlowError:
+  - takeScreenshot: artifacts/screenshots/ios-uitest-smoke-error
+
+---
+
+# Launch with all UITEST_* env vars to bypass auth and load fixtures
+- launchApp:
+    clearState: true
+    stopApp: true
+    env:
+      UITEST_MODE: "true"
+      UITEST_AUTH_SECRET: "${UITEST_AUTH_SECRET}"
+      UITEST_USER_ID: "${UITEST_USER_ID:-test-user-123}"
+      UITEST_USE_FIXTURES: "true"
+      UITEST_SKIP_ONBOARDING: "true"
+
+# ============================================
+# ASSERT: Auth was bypassed - home screen visible (not PairingView)
+# ============================================
+
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 15000
+
+- assertVisible:
+    id: "home_screen"
+
+# Verify we are NOT on the pairing screen (auth bypass worked)
+- assertNotVisible:
+    text: "Connect to AmakaFlow"
+
+- takeScreenshot: artifacts/screenshots/ios-uitest-smoke-01-auth-bypassed
+
+# ============================================
+# ASSERT: Fixture data loaded in workouts
+# ============================================
+
+# Navigate to workouts tab
+- tapOn:
+    id: "workouts_tab"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "workouts_screen"
+    timeout: 5000
+
+- assertVisible:
+    id: "workouts_screen"
+
+# Verify fixture workout cards are present (proves UITEST_USE_FIXTURES worked)
+- assertVisible:
+    id: "workout_card_0"
+
+- takeScreenshot: artifacts/screenshots/ios-uitest-smoke-02-fixtures-loaded
+
+# ============================================
+# ASSERT: Tab bar navigation works with auth bypass
+# ============================================
+
+# Navigate to settings
+- tapOn:
+    id: "settings_tab"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "settings_screen"
+    timeout: 5000
+
+- assertVisible:
+    id: "settings_screen"
+
+# Return to home
+- tapOn:
+    id: "home_tab"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 5000
+
+- takeScreenshot: artifacts/screenshots/ios-uitest-smoke-03-complete
+
+# Final assertions
+- assertVisible:
+    id: "home_screen"
+- assertNotVisible:
+    id: "error_view"
+    optional: true
+- assertNotVisible:
+    id: "crash_dialog"
+    optional: true
