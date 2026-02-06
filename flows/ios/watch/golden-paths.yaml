@@ -18,11 +18,7 @@ onFlowError:
     clearState: true
     stopApp: true
 
-- extendedWaitUntil:
-    visible:
-      id: "watch_main_screen"
-    timeout: 15000
-
+- wait: 10000
 - assertVisible:
     id: "watch_main_screen"
 - assertNotVisible:
@@ -39,11 +35,6 @@ onFlowError:
 - tapOn:
     id: "start_workout_button"
     retryTapIfNoChange: true
-
-- extendedWaitUntil:
-    visible:
-      id: "workout_active_view"
-    timeout: 5000
 
 - assertVisible:
     id: "workout_active_view"
@@ -81,11 +72,6 @@ onFlowError:
     id: "quick_log_button"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "quick_log_view"
-    timeout: 5000
-
 - assertVisible:
     id: "quick_log_view"
 
@@ -118,11 +104,6 @@ onFlowError:
     text: "End"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "workout_summary"
-    timeout: 5000
-
 - assertVisible:
     id: "workout_summary"
 
@@ -137,10 +118,8 @@ onFlowError:
     id: "done_button"
     retryTapIfNoChange: true
 
-- extendedWaitUntil:
-    visible:
-      id: "watch_main_screen"
-    timeout: 5000
+- assertVisible:
+    id: "watch_main_screen"
 
 - takeScreenshot: artifacts/screenshots/watchos-golden-09-complete
 

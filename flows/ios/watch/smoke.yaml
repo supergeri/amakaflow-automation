@@ -17,10 +17,9 @@ onFlowError:
     stopApp: true
 
 # Wait for app to load
-- extendedWaitUntil:
-    visible:
-      id: "watch_main_screen"
-    timeout: 15000
+- wait: 10000
+- assertVisible:
+    id: "watch_main_screen"
 
 # Take screenshot of initial state
 - takeScreenshot: artifacts/screenshots/watchos-smoke-01-launch
