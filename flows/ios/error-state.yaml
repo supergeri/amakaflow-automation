@@ -21,6 +21,7 @@ onFlowError:
       UITEST_USE_FIXTURES: "true"
       UITEST_FIXTURE_STATE: "error"
       UITEST_SKIP_ONBOARDING: "true"
+      UITEST_SKIP_APPLE_WATCH: "true"
 
 # Wait for home screen (auth bypass should still work)
 - wait: 10000

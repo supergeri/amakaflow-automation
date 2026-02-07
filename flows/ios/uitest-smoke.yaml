@@ -25,6 +25,7 @@ onFlowError:
       UITEST_USE_FIXTURES: "true"
       UITEST_FIXTURES: "amrap_10min,emom_strength"
       UITEST_SKIP_ONBOARDING: "true"
+      UITEST_SKIP_APPLE_WATCH: "true"
 
 # ============================================
 # ASSERT: Auth was bypassed - home screen visible (not PairingView)

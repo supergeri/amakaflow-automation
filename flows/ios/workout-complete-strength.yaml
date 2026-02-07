@@ -21,6 +21,7 @@ onFlowError:
       UITEST_USE_FIXTURES: "true"
       UITEST_FIXTURES: "strength_block_w1"
       UITEST_SKIP_ONBOARDING: "true"
+      UITEST_SKIP_APPLE_WATCH: "true"
 
 # Wait for home screen
 - wait: 10000
