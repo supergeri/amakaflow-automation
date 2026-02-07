@@ -26,10 +26,20 @@ onFlowError:
       UITEST_SKIP_ONBOARDING: "true"
       UITEST_SKIP_APPLE_WATCH: "true"
 
+# Dismiss any system dialogs (WorkoutKit authorization, notifications, etc.)
+- waitForAnimationToEnd
+- tapOn:
+    text: "Don't Allow"
+    optional: true
+- tapOn:
+    text: "Allow"
+    optional: true
+
 - extendedWaitUntil:
     visible:
       id: "home_screen"
     timeout: 15000
+
 - assertNotVisible:
     id: "error_view"
     optional: true
@@ -40,13 +50,16 @@ onFlowError:
 # GOLDEN PATH 1: View Workouts
 # ============================================
 
-# Navigate to workouts - MUST work
+# Navigate to workouts tab via tab bar icon
+# (text "Workouts" is ambiguous - appears in stats section too)
 - tapOn:
-    id: "workouts_tab"
+    id: "figure.run"
     retryTapIfNoChange: true
 
-- assertVisible:
-    id: "workouts_screen"
+- extendedWaitUntil:
+    visible:
+      id: "workouts_screen"
+    timeout: 10000
 
 - takeScreenshot: artifacts/screenshots/ios-golden-02-workouts-list
 
@@ -59,20 +72,36 @@ onFlowError:
 
 - takeScreenshot: artifacts/screenshots/ios-golden-03-workout-detail
 
-# Go back
-- back
+# Dismiss workout detail sheet (presented as modal, not navigation push)
+# Optional because workout_card_0 tap is optional
+- tapOn:
+    id: "xmark"
+    optional: true
+- waitForAnimationToEnd
 
 # ============================================
 # GOLDEN PATH 2: Voice Workout
 # ============================================
+
+# Return to home first
+- tapOn:
+    id: "house.fill"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 10000
 
 # Open voice workout - MUST work (core feature)
 - tapOn:
     id: "voice_workout_button"
     retryTapIfNoChange: true
 
-- assertVisible:
-    id: "voice_recording_view"
+- extendedWaitUntil:
+    visible:
+      id: "voice_recording_view"
+    timeout: 10000
 
 - takeScreenshot: artifacts/screenshots/ios-golden-04-voice-workout
 
@@ -82,20 +111,36 @@ onFlowError:
 
 - takeScreenshot: artifacts/screenshots/ios-golden-05-voice-ready
 
-# Go back without recording
-- back
+# Dismiss voice workout sheet (presented as modal with "Close" toolbar button)
+- tapOn:
+    text: "Close"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 
 # ============================================
 # GOLDEN PATH 3: Activity History
 # ============================================
 
-# Navigate to history/activity - MUST work
+# Navigate via More menu (History is in overflow with 6 tabs)
 - tapOn:
-    id: "history_tab"
+    text: "More"
     retryTapIfNoChange: true
 
-- assertVisible:
-    id: "history_screen"
+- tapOn:
+    text: "History"
+    retryTapIfNoChange: true
+
+# Dismiss any API error dialogs (no backend in test mode)
+- waitForAnimationToEnd
+- tapOn:
+    text: "OK"
+    optional: true
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "history_screen"
+    timeout: 10000
 
 - takeScreenshot: artifacts/screenshots/ios-golden-06-history
 
@@ -107,35 +152,55 @@ onFlowError:
 
 - takeScreenshot: artifacts/screenshots/ios-golden-07-completion-detail
 
-# Go back
-- back
+# Dismiss completion detail sheet if it was opened (optional)
+- tapOn:
+    text: "Done"
+    optional: true
+- waitForAnimationToEnd
 
 # ============================================
 # GOLDEN PATH 4: Settings
 # ============================================
 
-# Navigate to settings - MUST work
+# Navigate via More tab bar button (resets More navigation stack)
 - tapOn:
-    id: "settings_tab"
+    text: "More"
     retryTapIfNoChange: true
 
-- assertVisible:
-    id: "settings_screen"
+- tapOn:
+    text: "Settings"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "settings_screen"
+    timeout: 10000
 
 - takeScreenshot: artifacts/screenshots/ios-golden-08-settings
 
-# Open voice settings - MUST work
+# Open voice transcription settings - MUST work
+# Need to scroll down past Workout Device and Audio Cues sections
+- scrollUntilVisible:
+    element:
+      text: "Transcription Settings"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
-    text: "Voice"
+    text: "Transcription Settings"
     retryTapIfNoChange: true
 
-- assertVisible:
-    id: "voice_settings_screen"
+- extendedWaitUntil:
+    visible:
+      id: "voice_settings_screen"
+    timeout: 10000
 
 - takeScreenshot: artifacts/screenshots/ios-golden-09-voice-settings
 
-# Go back
-- back
+# Dismiss voice settings sheet (presented as modal with "Done" toolbar button)
+- tapOn:
+    text: "Done"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 
 # ============================================
 # FINAL STATE
@@ -143,11 +208,13 @@ onFlowError:
 
 # Return to home
 - tapOn:
-    id: "home_tab"
+    id: "house.fill"
     retryTapIfNoChange: true
 
-- assertVisible:
-    id: "home_screen"
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 10000
 
 - takeScreenshot: artifacts/screenshots/ios-golden-10-complete
 
@@ -155,11 +222,9 @@ onFlowError:
 - assertVisible:
     id: "home_screen"
 - assertVisible:
-    id: "home_tab"
+    id: "house.fill"
 - assertVisible:
-    id: "workouts_tab"
-- assertVisible:
-    id: "settings_tab"
+    id: "figure.run"
 - assertNotVisible:
     id: "error_view"
     optional: true
