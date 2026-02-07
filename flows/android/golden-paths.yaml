@@ -192,11 +192,12 @@ onFlowError:
 # Need to scroll down to find it
 - scrollUntilVisible:
     element:
-      text: "Transcription"
+      text: "Transcription Settings"
     direction: DOWN
     timeout: 10000
+    speed: 25
 - tapOn:
-    text: "Transcription"
+    text: "Transcription Settings"
     retryTapIfNoChange: true
 
 - extendedWaitUntil:
