@@ -2,12 +2,18 @@
 
 Critical user journeys on the AmakaFlow Apple Watch app.
 
+> **Implementation Note:** Maestro does not support watchOS simulators. The Maestro
+> flows in `flows/ios/watch/` are aspirational documentation only. These scenarios
+> are actually tested via **XCUITests** in the `amakaflow-ios-app` repository under
+> the `AmakaFlowWatch Watch AppUITests` target. See the XCUITest files for the
+> executable test implementations.
+
 ## Prerequisites
 
 - watchOS Simulator booted (Apple Watch Series 9)
 - Paired with iPhone simulator
 - AmakaFlow Watch app installed
-- Maestro installed
+- Xcode with XCUITest support (for actual test execution)
 
 ---
 

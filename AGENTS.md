@@ -10,9 +10,14 @@ The test runner agent executes test scenarios across web and mobile platforms us
 |----------|------|---------------|
 | Web | Browser (Playwright) | Chrome 1280x720 |
 | iOS | Maestro | iPhone 15 Pro Simulator |
-| watchOS | Maestro | Apple Watch Series 9 Simulator |
+| watchOS | XCUITest (in amakaflow-ios-app) | Apple Watch Series 9 Simulator |
 | Android | Maestro | Pixel 7 Emulator |
 | Wear OS | Maestro | Wear OS Emulator |
+| Garmin (unit) | Connect IQ SDK test runner | N/A (headless) |
+| Garmin (companion) | Maestro | iOS Simulator / Android Emulator |
+| Garmin (simulator) | Custom scripts | Garmin Simulator |
+
+> **Note:** watchOS Maestro flows in `flows/ios/watch/` are aspirational documentation only. Maestro does not support watchOS simulators. Actual watchOS tests are XCUITests in the `amakaflow-ios-app` repository.
 
 ### Execution Flow
 
@@ -26,6 +31,8 @@ The test runner agent executes test scenarios across web and mobile platforms us
 2. **Service/App Health Verification**
    - Web: Run API health checks
    - Mobile: Verify app is installed and can launch
+   - Garmin: Verify Connect IQ SDK is available (`connectiq --version`)
+   - Garmin companion: Verify companion app is installed on simulator/emulator
    - If critical failure, abort with clear error
 
 3. **Suite Execution**
@@ -78,16 +85,17 @@ appId: com.amakaflow.app
 
 ### Suite Mapping
 
-| Suite | Web | iOS | Android | watchOS | Wear OS |
-|-------|-----|-----|---------|---------|---------|
-| `smoke` | ✓ | ✓ | ✓ | - | - |
-| `health` | ✓ | - | - | - | - |
-| `golden` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `api` | ✓ | - | - | - | - |
-| `ios` | - | ✓ | - | ✓ | - |
-| `android` | - | - | ✓ | - | ✓ |
-| `mobile` | - | ✓ | ✓ | ✓ | ✓ |
-| `full` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Suite | Web | iOS | Android | watchOS | Wear OS | Garmin |
+|-------|-----|-----|---------|---------|---------|--------|
+| `smoke` | ✓ | ✓ | ✓ | - | - | - |
+| `health` | ✓ | - | - | - | - | - |
+| `golden` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `api` | ✓ | - | - | - | - | - |
+| `ios` | - | ✓ | - | ✓ | - | - |
+| `android` | - | - | ✓ | - | ✓ | - |
+| `garmin` | - | - | - | - | - | ✓ |
+| `mobile` | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ### Parallel vs Sequential
 
@@ -140,4 +148,14 @@ Before running mobile tests:
    # Verify installation
    maestro --version
    # Should be >= 1.36.0
+   ```
+
+4. **Garmin**:
+   ```bash
+   # Install Connect IQ SDK from https://developer.garmin.com/connect-iq/sdk/
+   export CONNECTIQ_HOME=/path/to/connectiq-sdk
+   # Verify installation
+   connectiq --version
+   # Start Garmin simulator (for simulator script tests)
+   connectiq simulator
    ```

@@ -37,6 +37,12 @@ You are a systematic, evidence-based QA automation engineer testing the AmakaFlo
 - Test on Wear OS emulator (Wear)
 - Verify Health Connect permissions are granted
 
+### Garmin (Multi-Layer)
+- Unit tests validate Monkey C business logic in isolation
+- Companion app tests use Maestro against the phone companion app
+- Simulator scripts validate watch face/widget rendering via Garmin simulator
+- Test data sync between watch and companion app when possible
+
 ## Communication Style
 
 - Report results in structured format (pass/fail with evidence)

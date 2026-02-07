@@ -2,13 +2,14 @@
 
 Autonomous test automation for the AmakaFlow fitness platform using OpenClaw (Claude Code) and Maestro.
 
-Supports: **Web** | **iOS** | **Android** | **watchOS** | **Wear OS**
+Supports: **Web** | **iOS** | **Android** | **watchOS** | **Wear OS** | **Garmin**
 
 ## Overview
 
 This repository contains declarative test scenarios that can be executed autonomously:
 - **Web tests**: Executed via OpenClaw's Browser tool (Playwright-backed)
 - **Mobile tests**: Executed via Maestro (declarative YAML flows)
+- **Garmin tests**: Multi-layer approach using Connect IQ unit tests, Maestro companion flows, and simulator scripts
 
 No coding required at runtime - tests are defined in Markdown/YAML and interpreted by the AI agent or Maestro.
 
@@ -41,6 +42,26 @@ export ANTHROPIC_API_KEY=sk-...
 
 # Run everything
 ./scripts/run-full-suite.sh full
+```
+
+### Running Garmin Tests
+
+```bash
+# Run Garmin unit tests (requires Connect IQ SDK)
+export CONNECTIQ_HOME=/path/to/connectiq-sdk
+connectiq test garmin/unit-tests/
+
+# Run Garmin companion app flows (iOS)
+maestro test flows/garmin/companion/ios/smoke.yaml
+
+# Run Garmin companion app flows (Android)
+maestro test flows/garmin/companion/android/smoke.yaml
+
+# Run Garmin simulator scripts
+./garmin/simulator-scripts/run-all.sh
+
+# Run full Garmin suite
+./scripts/run-full-suite.sh garmin
 ```
 
 ## AI Model Configuration
@@ -88,16 +109,17 @@ cp .env.example .env
 
 ## Test Suites
 
-| Suite | Web | iOS | Android | watchOS | Wear OS | Duration |
-|-------|-----|-----|---------|---------|---------|----------|
-| `smoke` | ✓ | ✓ | ✓ | - | - | ~3 min |
-| `health` | ✓ | - | - | - | - | ~30 sec |
-| `golden` | ✓ | ✓ | ✓ | ✓ | ✓ | ~15 min |
-| `api` | ✓ | - | - | - | - | ~5 min |
-| `ios` | - | ✓ | - | ✓ | - | ~10 min |
-| `android` | - | - | ✓ | - | ✓ | ~10 min |
-| `mobile` | - | ✓ | ✓ | ✓ | ✓ | ~20 min |
-| `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ~30 min |
+| Suite | Web | iOS | Android | watchOS | Wear OS | Garmin | Duration |
+|-------|-----|-----|---------|---------|---------|--------|----------|
+| `smoke` | ✓ | ✓ | ✓ | - | - | - | ~3 min |
+| `health` | ✓ | - | - | - | - | - | ~30 sec |
+| `golden` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ~15 min |
+| `api` | ✓ | - | - | - | - | - | ~5 min |
+| `ios` | - | ✓ | - | ✓ | - | - | ~10 min |
+| `android` | - | - | ✓ | - | ✓ | - | ~10 min |
+| `garmin` | - | - | - | - | - | ✓ | ~8 min |
+| `mobile` | - | ✓ | ✓ | ✓ | ✓ | ✓ | ~25 min |
+| `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ~35 min |
 
 ## Platform Requirements
 
@@ -116,6 +138,13 @@ cp .env.example .env
 - Android Emulator running (`emulator -avd Pixel_7_API_34 &`)
 - AmakaFlow Android app installed on emulator
 - Maestro installed
+
+### Garmin
+- [Garmin Connect IQ SDK](https://developer.garmin.com/connect-iq/sdk/) installed
+- `CONNECTIQ_HOME` environment variable set to SDK install path
+- Garmin simulator (included in Connect IQ SDK) for simulator script tests
+- For companion app tests: iOS simulator or Android emulator with AmakaFlow companion app installed
+- Maestro installed (for companion app flows)
 
 ## Directory Structure
 
@@ -152,14 +181,21 @@ amakaflow-automation/
 │   │   ├── smoke.yaml
 │   │   ├── golden-paths.yaml
 │   │   └── watch/
+│   │       ├── smoke.yaml         # ⚠️ Aspirational - Maestro can't run on watchOS
+│   │       └── golden-paths.yaml  # ⚠️ Aspirational - see XCUITests in amakaflow-ios-app
+│   ├── android/
+│   │   ├── smoke.yaml
+│   │   ├── golden-paths.yaml
+│   │   └── wear/
 │   │       ├── smoke.yaml
 │   │       └── golden-paths.yaml
-│   └── android/
-│       ├── smoke.yaml
-│       ├── golden-paths.yaml
-│       └── wear/
-│           ├── smoke.yaml
-│           └── golden-paths.yaml
+│   └── garmin/
+│       └── companion/
+│           ├── ios/               # Maestro flows for iOS companion app
+│           └── android/           # Maestro flows for Android companion app
+├── garmin/                    # Garmin Connect IQ test infrastructure
+│   ├── unit-tests/            # Monkey C unit tests
+│   └── simulator-scripts/     # Garmin simulator automation
 ├── artifacts/                 # Test outputs (gitignored)
 │   ├── screenshots/
 │   ├── logs/
@@ -188,6 +224,11 @@ amakaflow-automation/
 2. Executes on connected simulator/emulator
 3. Takes screenshots at defined points
 4. Reports pass/fail per flow
+
+### Garmin Tests
+1. **Unit tests**: Connect IQ SDK test runner executes Monkey C unit tests
+2. **Companion flows**: Maestro tests the phone companion app (iOS or Android)
+3. **Simulator scripts**: Custom scripts drive the Garmin simulator for watch face/widget testing
 
 ### Example Maestro Flow
 
