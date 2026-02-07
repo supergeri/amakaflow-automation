@@ -68,6 +68,7 @@ onFlowError:
     element:
       text: "Data Sources"
     direction: DOWN
+    speed: 25
     timeout: 10000
 
 - takeScreenshot: artifacts/screenshots/garmin-sync-smoke-03-data-sources
@@ -93,6 +94,7 @@ onFlowError:
     element:
       text: "Garmin Connect"
     direction: DOWN
+    speed: 25
     timeout: 10000
 
 # Verify Garmin Connect is listed as a source
@@ -117,12 +119,11 @@ onFlowError:
 # VERIFY SYNC UI ELEMENTS
 # ============================================
 
-# Verify sync status indicator is present (optional - may show "Not Connected")
+# Sync status must always be present (even if showing "Not Connected")
 - assertVisible:
     id: "garmin_sync_status"
-    optional: true
 
-# Verify connect/disconnect button is present
+# Connect/disconnect button is optional - may not exist if already connected
 - assertVisible:
     id: "garmin_connect_button"
     optional: true

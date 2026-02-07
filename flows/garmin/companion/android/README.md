@@ -16,3 +16,4 @@ the Android app has Garmin Connect IQ integration.
 - Maestro can only test the phone-side UI, not the Garmin watch
 - Android flows will mirror the iOS companion flows in `../ios/`
 - Requires Garmin Connect IQ Android SDK integration in the app
+- Expected Android appId: `com.amakaflow.companion`
