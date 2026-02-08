@@ -8,9 +8,16 @@ This is the AmakaFlow E2E test automation framework using Maestro for mobile tes
 amakaflow-automation/
 ├── flows/                 # Maestro YAML flows (executable tests)
 │   ├── ios/              # iOS phone tests
-│   ├── ios/watch/        # watchOS tests
+│   ├── ios/watch/        # watchOS tests (⚠️ aspirational - see note below)
 │   ├── android/          # Android phone tests
-│   └── android/wear/     # Wear OS tests
+│   ├── android/wear/     # Wear OS tests
+│   └── garmin/           # Garmin companion app Maestro flows
+│       └── companion/
+│           ├── ios/      # iOS companion flows for Garmin
+│           └── android/  # Android companion flows for Garmin
+├── garmin/               # Garmin Connect IQ test infrastructure
+│   ├── unit-tests/       # Connect IQ unit tests (Monkey C)
+│   └── simulator-scripts/ # Garmin simulator automation scripts
 ├── scenarios/            # Human-readable test documentation
 │   ├── web/              # Web test scenarios
 │   └── mobile/           # Mobile test scenarios
@@ -84,6 +91,45 @@ maestro studio
 - `amakaflow-dev-workspace` - Backend services (APIs)
 - `amakaflow-ios-app` - iOS app source
 - `amakaflow-android-app` - Android app source
+
+## watchOS Flows (Aspirational)
+
+The Maestro flows in `flows/ios/watch/` are **aspirational documentation only**. Maestro does NOT support watchOS simulators. These flows document desired test coverage but cannot be executed. Actual watchOS tests are implemented as XCUITests in the `amakaflow-ios-app` repository under the `AmakaFlowWatch Watch AppUITests` target.
+
+## Garmin Testing
+
+Garmin Connect IQ testing uses a multi-layer approach since there is no single tool that covers all Garmin test needs:
+
+### Test Layers
+
+| Layer | Tool | Location | What It Tests |
+|-------|------|----------|---------------|
+| Unit tests | Connect IQ SDK test runner | `garmin/unit-tests/` | Monkey C business logic, data models |
+| Companion app | Maestro | `flows/garmin/companion/{ios,android}/` | Phone companion app interactions |
+| Simulator | Custom scripts | `garmin/simulator-scripts/` | Watch face/widget rendering, sensor simulation |
+
+### Garmin Commands
+
+```bash
+# Run Garmin unit tests (requires Connect IQ SDK)
+connectiq test garmin/unit-tests/
+
+# Run Garmin companion app Maestro flows (iOS)
+maestro test flows/garmin/companion/ios/sync-smoke.yaml
+
+# Run Garmin companion app Maestro flows (Android)
+# Not yet implemented
+# maestro test flows/garmin/companion/android/sync-smoke.yaml
+
+# Run Garmin simulator scripts
+./garmin/simulator-scripts/run-all.sh  # TODO: not yet implemented
+```
+
+### Connect IQ SDK Requirements
+
+- Install the [Garmin Connect IQ SDK](https://developer.garmin.com/connect-iq/sdk/)
+- Set `CONNECTIQ_HOME` environment variable to SDK install path
+- Garmin simulator must be running for simulator script tests
 
 ## Git Workflow
 

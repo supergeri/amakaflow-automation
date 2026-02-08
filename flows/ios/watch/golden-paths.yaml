@@ -1,7 +1,13 @@
+# ⚠️ ASPIRATIONAL DOCUMENTATION ONLY ⚠️
+# Maestro does NOT support watchOS simulators. This flow documents desired
+# test coverage but CANNOT be executed. Actual watchOS tests are implemented
+# as XCUITests in the amakaflow-ios-app repository.
+# See: AmakaFlowWatch Watch AppUITests target
+
 # watchOS Golden Paths Flow
 # Tests critical user journeys on Apple Watch
 #
-# Run: maestro test flows/ios/watch/golden-paths.yaml
+# Run (aspirational - cannot execute): maestro test flows/ios/watch/golden-paths.yaml
 
 appId: com.myamaka.AmakaFlowCompanion.watchkitapp
 

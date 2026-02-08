@@ -1,7 +1,13 @@
+# ⚠️ ASPIRATIONAL DOCUMENTATION ONLY ⚠️
+# Maestro does NOT support watchOS simulators. This flow documents desired
+# test coverage but CANNOT be executed. Actual watchOS tests are implemented
+# as XCUITests in the amakaflow-ios-app repository.
+# See: AmakaFlowWatch Watch AppUITests target
+
 # watchOS Smoke Test Flow
 # Validates watch app launches and basic functionality
 #
-# Run: maestro test flows/ios/watch/smoke.yaml
+# Run (aspirational - cannot execute): maestro test flows/ios/watch/smoke.yaml
 # Note: Requires watchOS simulator paired with iOS simulator
 
 appId: com.myamaka.AmakaFlowCompanion.watchkitapp
