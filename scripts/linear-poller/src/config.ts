@@ -50,10 +50,10 @@ export function loadConfig(): Config {
     linearTodoStatusId: optional("LINEAR_TODO_STATUS_ID", "1e077984-ac88-4a3d-b162-36b660dba604"),
 
     antfarmBin: optional("ANTFARM_BIN", "antfarm"),
-    antfarmWorkflow: optional("ANTFARM_WORKFLOW", "feature-dev"),
-    antfarmTimeoutMs: parseInt(optional("ANTFARM_TIMEOUT_MS", "1800000"), 10),  // 30 min
+    antfarmWorkflow: optional("ANTFARM_WORKFLOW", "ai-developer"),
+    antfarmTimeoutMs: parseInt(optional("ANTFARM_TIMEOUT_MS", "3600000"), 10),  // 60 min
 
-    pollIntervalMs: parseInt(optional("POLL_INTERVAL_MS", "60000"), 10),  // 60s
+    pollIntervalMs: parseInt(optional("POLL_INTERVAL_MS", "300000"), 10),  // 5 min
     maxRetries: parseInt(optional("MAX_RETRIES", "2"), 10),
     stateFile: optional("STATE_FILE", "./poller-state.json"),
     dryRun: process.argv.includes("--dry-run"),

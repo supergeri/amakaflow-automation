@@ -37,7 +37,7 @@ every 60s:
   4. Pick lowest ticket number (oldest first)
   5. Re-verify ticket status (race condition guard)
   6. Move ticket to "In Progress"
-  7. Run: antfarm workflow run feature-dev "<ticket details>"
+  7. Run: antfarm workflow run ai-developer "<ticket details>"
   8. On success → move to "Done", add comment
   9. On failure → add error comment, move back to "Todo" for retry
 ```

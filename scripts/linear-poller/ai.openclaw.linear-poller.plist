@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.openclaw.linear-poller</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/npx</string>
+        <string>tsx</string>
+        <string>src/poller.ts</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/tmp/amakaflow-automation/scripts/linear-poller</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/davidmini/.local/bin</string>
+        <key>HOME</key>
+        <string>/Users/davidmini</string>
+    </dict>
+
+    <!-- Run continuously (the poller has its own internal poll loop) -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Restart on crash after 30s -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!-- Logs -->
+    <key>StandardOutPath</key>
+    <string>/Users/davidmini/.openclaw/logs/linear-poller.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/davidmini/.openclaw/logs/linear-poller.log</string>
+</dict>
+</plist>

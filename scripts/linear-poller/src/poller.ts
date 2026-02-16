@@ -198,7 +198,7 @@ async function dispatchTicket(issue: ReadyIssue): Promise<void> {
     // --- FAILURE ---
     const reason = result.timedOut
       ? `Workflow timed out after ${Math.round(config.antfarmTimeoutMs / 1000)}s`
-      : `Workflow failed with exit code ${result.exitCode}`;
+      : `Workflow ${result.finalStatus} (run: ${result.runId ?? "unknown"})`;
 
     log.error(tag, reason);
     state.finishJob(result.timedOut ? "timed_out" : "failed", reason, result.runId ?? undefined);

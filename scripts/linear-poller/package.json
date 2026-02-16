@@ -7,7 +7,9 @@
     "start": "tsx src/poller.ts",
     "once": "tsx src/poller.ts --once",
     "dry-run": "tsx src/poller.ts --dry-run",
-    "status": "tsx src/poller.ts --status"
+    "status": "tsx src/poller.ts --status",
+    "report": "tsx src/report.ts",
+    "report:save": "tsx src/report.ts --write"
   },
   "dependencies": {
     "tsx": "^4.19.0"
