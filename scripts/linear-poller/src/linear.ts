@@ -231,6 +231,24 @@ export class LinearClient {
   }
 
   /**
+   * Move issue to In Review (after successful AI push, for CI validation).
+   */
+  async moveToInReview(issueId: string): Promise<void> {
+    if (!this.config.linearInReviewStatusId) {
+      console.log("[linear] LINEAR_IN_REVIEW_STATUS_ID not set — skipping move to In Review");
+      return;
+    }
+    await this.query(
+      `mutation($id: String!, $stateId: String!) {
+        issueUpdate(id: $id, input: { stateId: $stateId }) {
+          success
+        }
+      }`,
+      { id: issueId, stateId: this.config.linearInReviewStatusId }
+    );
+  }
+
+  /**
    * Add a comment to an issue.
    */
   async addComment(issueId: string, body: string): Promise<void> {

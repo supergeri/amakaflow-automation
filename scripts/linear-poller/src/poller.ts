@@ -16,8 +16,8 @@
  * 7. Linear API down: catch error → log → retry on next poll
  * 8. Antfarm binary missing: catch spawn error → log → exit
  * 9. Poller restart with orphaned job: detect running job in state → mark failed → resume polling
- * 10. Ticket reassigned during execution: check assignee before marking Done
- * 11. Ticket canceled during execution: check status before marking Done
+ * 10. Ticket reassigned during execution: check assignee before marking In Review
+ * 11. Ticket canceled during execution: check status before marking In Review
  * 12. Ticket moved out of Todo before dispatch: re-verify status before starting
  * 13. Empty description: skip ticket, comment asking for description
  * 14. Duplicate dispatch prevention: state tracks current job, won't start another
@@ -166,7 +166,7 @@ async function dispatchTicket(issue: ReadyIssue): Promise<void> {
 
     // Scenario 10: Check if still assigned to us
     if (postExec.assignee?.id !== config.linearAssigneeId) {
-      log.warn(tag, "Assignee changed during execution — not marking Done");
+      log.warn(tag, "Assignee changed during execution — not marking In Review");
       await linear.addComment(
         issue.id,
         `✅ **Antfarm completed** workflow for this ticket, but assignee changed during execution. Please review the work.`
@@ -176,20 +176,23 @@ async function dispatchTicket(issue: ReadyIssue): Promise<void> {
 
     // Scenario 11: Check if ticket was canceled
     if (postExec.state.type === "canceled") {
-      log.warn(tag, "Ticket was canceled during execution — not marking Done");
+      log.warn(tag, "Ticket was canceled during execution — not marking In Review");
       return;
     }
 
-    // Mark Done and comment
-    await linear.moveToDone(issue.id);
+    // Mark In Review (instead of Done) - allows CI to validate before human review
+    await linear.moveToInReview(issue.id);
     await linear.addComment(
       issue.id,
       [
-        `✅ **Antfarm completed** this ticket.`,
+        `✅ **Antfarm completed** this ticket and pushed to branch.`,
         "",
+        `- Branch: \`${result.branchName ?? "unknown"}\``,
         `- Workflow: \`${config.antfarmWorkflow}\``,
         result.runId ? `- Run ID: \`${result.runId}\`` : null,
         `- Duration: ${Math.round(result.durationMs / 1000)}s`,
+        "",
+        "Ticket moved to **In Review** for CI validation.",
       ]
         .filter(Boolean)
         .join("\n")

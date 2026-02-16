@@ -13,6 +13,7 @@ export interface Config {
   linearInProgressStatusId: string;
   linearDoneStatusId: string;
   linearTodoStatusId: string;
+  linearInReviewStatusId: string;  // New: status for tickets awaiting CI validation
 
   // Antfarm
   antfarmBin: string;          // Path to antfarm binary
@@ -48,6 +49,7 @@ export function loadConfig(): Config {
     linearInProgressStatusId: optional("LINEAR_IN_PROGRESS_STATUS_ID", "bafb8538-5b85-45c4-8630-7effdddbf34e"),
     linearDoneStatusId: optional("LINEAR_DONE_STATUS_ID", "06db5600-ff0f-47d8-92b8-d742ab151def"),
     linearTodoStatusId: optional("LINEAR_TODO_STATUS_ID", "1e077984-ac88-4a3d-b162-36b660dba604"),
+    linearInReviewStatusId: optional("LINEAR_IN_REVIEW_STATUS_ID", ""),  // Must be set if using AMA-616
 
     antfarmBin: optional("ANTFARM_BIN", "antfarm"),
     antfarmWorkflow: optional("ANTFARM_WORKFLOW", "ai-developer"),

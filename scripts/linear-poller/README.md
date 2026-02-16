@@ -46,7 +46,7 @@ every 60s:
 
 | # | Scenario | Behavior |
 |---|----------|----------|
-| 1 | Happy path | Todo → In Progress → antfarm → Done |
+| 1 | Happy path | Todo → In Progress → antfarm → In Review (for CI) → Done (after CI passes) |
 | 2 | Blocked ticket | Skip, log which tickets block it |
 | 3 | No tickets | Sleep until next poll |
 | 4 | Workflow fails | Comment error, back to Todo, retry on next poll |
@@ -55,8 +55,8 @@ every 60s:
 | 7 | Linear API down | Log error, retry on next poll |
 | 8 | Antfarm binary missing | Exit with error at startup |
 | 9 | Poller restart with orphaned job | Mark previous job failed, move ticket back to Todo |
-| 10 | Ticket reassigned during execution | Don't mark Done, add comment |
-| 11 | Ticket canceled during execution | Don't mark Done |
+| 10 | Ticket reassigned during execution | Don't mark In Review, add comment |
+| 11 | Ticket canceled during execution | Don't mark In Review |
 | 12 | Ticket moved before dispatch | Re-verify status, skip if changed |
 | 13 | Empty description | Skip, comment asking for description |
 | 14 | Duplicate dispatch | State tracks current job, blocks new dispatches |
@@ -87,6 +87,7 @@ Delete this file to reset all state.
 | `LINEAR_ASSIGNEE_ID` | No | Joshua's ID | User to poll for |
 | `LINEAR_ASSIGNEE_NAME` | No | Joshua | Display name for logs |
 | `LINEAR_PICKUP_STATUS` | No | Todo | Status to poll |
+| `LINEAR_IN_REVIEW_STATUS_ID` | No | — | Status ID for "In Review" (required for AMA-616) |
 | `ANTFARM_BIN` | No | antfarm | Path to antfarm binary |
 | `ANTFARM_WORKFLOW` | No | feature-dev | Workflow to dispatch |
 | `ANTFARM_TIMEOUT_MS` | No | 1800000 (30min) | Max workflow runtime |

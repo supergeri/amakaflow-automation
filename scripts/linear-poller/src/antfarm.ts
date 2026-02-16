@@ -18,6 +18,7 @@ export interface AntfarmResult {
   exitCode: number | null;
   timedOut: boolean;
   durationMs: number;
+  branchName: string | null;  // Branch name pushed by the agent (if available)
 }
 
 /**
@@ -37,6 +38,13 @@ export function buildTaskPrompt(issue: {
       ? issue.description.slice(0, maxDescLen) + "\n\n[description truncated]"
       : issue.description;
 
+  // Create a short slug for the branch name
+  const slug = issue.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 30);
+
   return [
     `Linear ticket: ${issue.identifier} — ${issue.title}`,
     `URL: ${issue.url}`,
@@ -46,9 +54,12 @@ export function buildTaskPrompt(issue: {
     "",
     "## Instructions",
     "- Follow the ticket description exactly",
+    `- Create a branch named \`agent/${issue.identifier}-${slug}\``,
+    `- Push your changes to this branch (use \`git push -u origin agent/${issue.identifier}-${slug}\`)`,
     "- Commit your work with a message referencing the ticket ID",
     "- If the ticket references specific files, only modify those files",
     "- Run any relevant tests before finishing",
+    "- When done, output the branch name in format: `Branch: agent/<ticket>-<slug>` so it can be tracked",
   ].join("\n");
 }
 
@@ -113,6 +124,28 @@ function checkRunStatus(config: Config, runId: string): { status: string; output
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Extract branch name from antfarm output.
+ * Looks for patterns like "Branch: agent/AMA-616-..." or "Pushed branch: ..."
+ */
+function extractBranchName(output: string): string | null {
+  // Try various patterns that might contain branch name
+  const patterns = [
+    /Branch:\s*(\S+)/i,
+    /Pushed branch:\s*(\S+)/i,
+    /branch:\s*(\S+)/i,
+    /(agent\/AMA-\d+-\S+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = output.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+/**
  * Run an Antfarm workflow and wait for completion by polling status.
  *
  * 1. Start the run (non-blocking)
@@ -139,6 +172,7 @@ export async function runWorkflow(
       exitCode: 1,
       timedOut: false,
       durationMs: Date.now() - startTime,
+      branchName: null,
     };
   }
 
@@ -172,6 +206,7 @@ export async function runWorkflow(
         exitCode: null,
         timedOut: true,
         durationMs: elapsed,
+        branchName: null,
       };
     }
 
@@ -186,6 +221,8 @@ export async function runWorkflow(
 
     // Terminal states
     if (status === "completed") {
+      // Try to extract branch name from final output
+      const branchName = extractBranchName(lastOutput);
       return {
         success: true,
         runId,
@@ -194,6 +231,7 @@ export async function runWorkflow(
         exitCode: 0,
         timedOut: false,
         durationMs: Date.now() - startTime,
+        branchName,
       };
     }
 
@@ -206,6 +244,7 @@ export async function runWorkflow(
         exitCode: 1,
         timedOut: false,
         durationMs: Date.now() - startTime,
+        branchName: extractBranchName(lastOutput),
       };
     }
 
