@@ -13,7 +13,7 @@
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/tmp/amakaflow-automation/scripts/linear-poller</string>
+    <string>/Users/davidmini/.openclaw/workspace/amakaflow-automation/scripts/linear-poller</string>
 
     <key>EnvironmentVariables</key>
     <dict>
