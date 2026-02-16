@@ -1,19 +1,24 @@
 /**
  * Antfarm workflow runner.
- * Spawns `antfarm workflow run` as a child process with timeout handling.
+ *
+ * `antfarm workflow run` is non-blocking — it starts a run and exits immediately.
+ * This module starts the run, extracts the run ID, then polls
+ * `antfarm workflow status <run-id>` until the run completes or fails.
  */
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import type { Config } from "./config.js";
+import { log } from "./log.js";
 
 export interface AntfarmResult {
   success: boolean;
   runId: string | null;
-  stdout: string;
+  finalStatus: string;  // "completed" | "failed" | "cancelled" | "timed_out"
   stderr: string;
   exitCode: number | null;
   timedOut: boolean;
   durationMs: number;
+  branchName: string | null;  // Branch name pushed by the agent (if available)
 }
 
 /**
@@ -33,6 +38,13 @@ export function buildTaskPrompt(issue: {
       ? issue.description.slice(0, maxDescLen) + "\n\n[description truncated]"
       : issue.description;
 
+  // Create a short slug for the branch name
+  const slug = issue.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 30);
+
   return [
     `Linear ticket: ${issue.identifier} — ${issue.title}`,
     `URL: ${issue.url}`,
@@ -42,97 +54,200 @@ export function buildTaskPrompt(issue: {
     "",
     "## Instructions",
     "- Follow the ticket description exactly",
+    `- Create a branch named \`agent/${issue.identifier}-${slug}\``,
+    `- Push your changes to this branch (use \`git push -u origin agent/${issue.identifier}-${slug}\`)`,
     "- Commit your work with a message referencing the ticket ID",
     "- If the ticket references specific files, only modify those files",
     "- Run any relevant tests before finishing",
+    "- When done, output the branch name in format: `Branch: agent/<ticket>-<slug>` so it can be tracked",
   ].join("\n");
 }
 
 /**
- * Run an Antfarm workflow and wait for completion.
- * Handles: stdout/stderr capture, timeout, exit code parsing, run ID extraction.
+ * Start an Antfarm workflow run. Returns the run ID or throws.
+ * `antfarm workflow run` exits immediately with the run ID in stdout.
  */
-export function runWorkflow(
+function startWorkflow(config: Config, task: string): string {
+  const result = (() => {
+    try {
+      const stdout = execFileSync(
+        config.antfarmBin,
+        ["workflow", "run", config.antfarmWorkflow, task],
+        { encoding: "utf-8", timeout: 30_000, env: { ...process.env } }
+      );
+      return { stdout, stderr: "", exitCode: 0 };
+    } catch (err: unknown) {
+      const e = err as { stdout?: string; stderr?: string; status?: number; message?: string };
+      return {
+        stdout: e.stdout || "",
+        stderr: e.stderr || e.message || "unknown error",
+        exitCode: e.status ?? 1,
+      };
+    }
+  })();
+
+  if (result.exitCode !== 0) {
+    throw new Error(`antfarm workflow run failed (exit ${result.exitCode}): ${result.stderr.trim()}`);
+  }
+
+  // Extract run ID from output like "Run: e4ca9670-2dcd-4b92-adea-6cdb39161440"
+  const match = result.stdout.match(/Run:\s+([0-9a-f-]+)/i);
+  if (!match) {
+    throw new Error(`Could not extract run ID from antfarm output: ${result.stdout.trim()}`);
+  }
+
+  return match[1];
+}
+
+/**
+ * Poll `antfarm workflow status <run-id>` and return the current status.
+ * Returns: "running" | "completed" | "failed" | "cancelled" | "unknown"
+ */
+function checkRunStatus(config: Config, runId: string): { status: string; output: string } {
+  try {
+    const stdout = execFileSync(
+      config.antfarmBin,
+      ["workflow", "status", runId],
+      { encoding: "utf-8", timeout: 15_000, env: { ...process.env } }
+    );
+
+    // Parse "Status: running" or "Status: completed" etc.
+    const statusMatch = stdout.match(/Status:\s+(\w+)/i);
+    const status = statusMatch ? statusMatch[1].toLowerCase() : "unknown";
+
+    return { status, output: stdout };
+  } catch {
+    return { status: "unknown", output: "" };
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Extract branch name from antfarm output.
+ * Looks for patterns like "Branch: agent/AMA-616-..." or "Pushed branch: ..."
+ */
+function extractBranchName(output: string): string | null {
+  // Try various patterns that might contain branch name
+  const patterns = [
+    /Branch:\s*(\S+)/i,
+    /Pushed branch:\s*(\S+)/i,
+    /branch:\s*(\S+)/i,
+    /(agent\/AMA-\d+-\S+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = output.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+/**
+ * Run an Antfarm workflow and wait for completion by polling status.
+ *
+ * 1. Start the run (non-blocking)
+ * 2. Poll status every `statusPollIntervalMs` until done or timeout
+ * 3. Return final result
+ */
+export async function runWorkflow(
   config: Config,
   task: string
 ): Promise<AntfarmResult> {
-  return new Promise((resolve) => {
-    const startTime = Date.now();
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let runId: string | null = null;
+  const startTime = Date.now();
+  const statusPollMs = 30_000;  // Check status every 30s
 
-    const proc = spawn(config.antfarmBin, ["workflow", "run", config.antfarmWorkflow, task], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
-      // Don't inherit cwd — antfarm should handle its own working directory
-    });
+  // Step 1: Start the run
+  let runId: string;
+  try {
+    runId = startWorkflow(config, task);
+  } catch (err) {
+    return {
+      success: false,
+      runId: null,
+      finalStatus: "failed",
+      stderr: (err as Error).message,
+      exitCode: 1,
+      timedOut: false,
+      durationMs: Date.now() - startTime,
+      branchName: null,
+    };
+  }
 
-    // Capture output
-    proc.stdout.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      stdout += text;
+  log.info("antfarm", `Run started: ${runId}`);
 
-      // Try to extract run ID from antfarm output
-      // Antfarm typically outputs something like "Run ID: abc-123" or "Started run abc-123"
-      const runIdMatch = text.match(/(?:Run ID|run|Started run)[:\s]+([a-zA-Z0-9_-]+)/i);
-      if (runIdMatch && !runId) {
-        runId = runIdMatch[1];
+  // Step 2: Poll status until completion or timeout
+  let lastStatus = "running";
+  let lastOutput = "";
+
+  while (true) {
+    const elapsed = Date.now() - startTime;
+
+    // Timeout check
+    if (elapsed >= config.antfarmTimeoutMs) {
+      log.warn("antfarm", `Timeout after ${Math.round(elapsed / 1000)}s — cancelling run`);
+      try {
+        execFileSync(config.antfarmBin, ["workflow", "stop", runId], {
+          encoding: "utf-8",
+          timeout: 15_000,
+          env: { ...process.env },
+        });
+      } catch {
+        log.error("antfarm", "Failed to cancel timed-out run");
       }
 
-      // Stream to console for visibility
-      process.stdout.write(`  [antfarm] ${text}`);
-    });
-
-    proc.stderr.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      stderr += text;
-      process.stderr.write(`  [antfarm:err] ${text}`);
-    });
-
-    // Timeout handler
-    const timer = setTimeout(() => {
-      timedOut = true;
-      console.warn(`[antfarm] Timeout after ${config.antfarmTimeoutMs}ms — killing process`);
-      proc.kill("SIGTERM");
-
-      // Force kill after 10s if SIGTERM doesn't work
-      setTimeout(() => {
-        if (!proc.killed) {
-          proc.kill("SIGKILL");
-        }
-      }, 10000);
-    }, config.antfarmTimeoutMs);
-
-    proc.on("close", (exitCode) => {
-      clearTimeout(timer);
-      const durationMs = Date.now() - startTime;
-
-      resolve({
-        success: exitCode === 0 && !timedOut,
-        runId,
-        stdout,
-        stderr,
-        exitCode,
-        timedOut,
-        durationMs,
-      });
-    });
-
-    proc.on("error", (err) => {
-      clearTimeout(timer);
-      const durationMs = Date.now() - startTime;
-
-      resolve({
+      return {
         success: false,
-        runId: null,
-        stdout,
-        stderr: `${stderr}\nProcess error: ${err.message}`,
+        runId,
+        finalStatus: "timed_out",
+        stderr: `Workflow timed out after ${Math.round(config.antfarmTimeoutMs / 1000)}s`,
         exitCode: null,
+        timedOut: true,
+        durationMs: elapsed,
+        branchName: null,
+      };
+    }
+
+    await sleep(statusPollMs);
+
+    const { status, output } = checkRunStatus(config, runId);
+    lastStatus = status;
+    lastOutput = output;
+
+    const elapsedMin = Math.round((Date.now() - startTime) / 60_000);
+    log.debug("antfarm", `Run ${runId.slice(0, 8)}: ${status} (${elapsedMin}m elapsed)`);
+
+    // Terminal states
+    if (status === "completed") {
+      // Try to extract branch name from final output
+      const branchName = extractBranchName(lastOutput);
+      return {
+        success: true,
+        runId,
+        finalStatus: "completed",
+        stderr: "",
+        exitCode: 0,
         timedOut: false,
-        durationMs,
-      });
-    });
-  });
+        durationMs: Date.now() - startTime,
+        branchName,
+      };
+    }
+
+    if (status === "failed" || status === "cancelled") {
+      return {
+        success: false,
+        runId,
+        finalStatus: status,
+        stderr: lastOutput,
+        exitCode: 1,
+        timedOut: false,
+        durationMs: Date.now() - startTime,
+        branchName: extractBranchName(lastOutput),
+      };
+    }
+
+    // "running", "unknown" → keep polling
+  }
 }

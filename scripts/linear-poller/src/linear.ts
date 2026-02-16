@@ -71,7 +71,7 @@ export class LinearClient {
         nodes: LinearIssue[];
       };
     }>(
-      `query($assigneeId: ID!, $teamId: String!, $statusName: String!) {
+      `query($assigneeId: ID!, $teamId: ID!, $statusName: String!) {
         issues(
           filter: {
             assignee: { id: { eq: $assigneeId } }
@@ -113,30 +113,44 @@ export class LinearClient {
       }
     );
 
-    return data.issues.nodes.map((issue) => {
-      // Check "blocks" relations where this issue is blocked BY another
-      const blockedByUnresolved = issue.relations.nodes
-        .filter((r) => {
-          // Linear relation types: "blocks" means relatedIssue blocks this issue
-          // We want to find issues that block THIS issue and aren't done/canceled
-          return (
-            r.type === "blocks" &&
-            r.relatedIssue.state.type !== "completed" &&
-            r.relatedIssue.state.type !== "canceled"
+    return data.issues.nodes
+      // Filter out epics (tickets with unresolved children are organizational, not actionable)
+      .filter((issue) => {
+        const unresolvedChildren = issue.children.nodes.filter(
+          (c) => c.state.name !== "Done" && c.state.name !== "Canceled"
+        );
+        if (unresolvedChildren.length > 0) {
+          console.log(
+            `[linear] Skipping ${issue.identifier} (epic with ${unresolvedChildren.length} unresolved children: ${unresolvedChildren.map((c) => c.identifier).join(", ")})`
           );
-        })
-        .map((r) => r.relatedIssue.identifier);
+          return false;
+        }
+        return true;
+      })
+      .map((issue) => {
+        // Check "blocks" relations where this issue is blocked BY another
+        const blockedByUnresolved = issue.relations.nodes
+          .filter((r) => {
+            // Linear relation types: "blocks" means relatedIssue blocks this issue
+            // We want to find issues that block THIS issue and aren't done/canceled
+            return (
+              r.type === "blocks" &&
+              r.relatedIssue.state.type !== "completed" &&
+              r.relatedIssue.state.type !== "canceled"
+            );
+          })
+          .map((r) => r.relatedIssue.identifier);
 
-      return {
-        id: issue.id,
-        identifier: issue.identifier,
-        title: issue.title,
-        description: issue.description || "",
-        number: issue.number,
-        url: issue.url,
-        blockedByUnresolved,
-      };
-    });
+        return {
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          description: issue.description || "",
+          number: issue.number,
+          url: issue.url,
+          blockedByUnresolved,
+        };
+      });
   }
 
   /**
@@ -213,6 +227,24 @@ export class LinearClient {
         }
       }`,
       { id: issueId, stateId: this.config.linearTodoStatusId }
+    );
+  }
+
+  /**
+   * Move issue to In Review (after successful AI push, for CI validation).
+   */
+  async moveToInReview(issueId: string): Promise<void> {
+    if (!this.config.linearInReviewStatusId) {
+      console.log("[linear] LINEAR_IN_REVIEW_STATUS_ID not set — skipping move to In Review");
+      return;
+    }
+    await this.query(
+      `mutation($id: String!, $stateId: String!) {
+        issueUpdate(id: $id, input: { stateId: $stateId }) {
+          success
+        }
+      }`,
+      { id: issueId, stateId: this.config.linearInReviewStatusId }
     );
   }
 
