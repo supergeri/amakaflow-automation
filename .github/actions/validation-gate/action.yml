@@ -1,0 +1,351 @@
+name: 'Validation Gate'
+description: 'CI-to-Linear feedback loop for AI-generated branches. Creates PRs on success, bounces tickets on failure.'
+
+inputs:
+  linear-api-key:
+    description: 'Linear API key for status updates and comments'
+    required: true
+  ticket-id:
+    description: 'Linear ticket identifier (e.g., AMA-123). If empty, extracted from branch name.'
+    required: false
+    default: ''
+  repo-name:
+    description: 'Repository name for context in Linear comments'
+    required: true
+  test-results-summary:
+    description: 'Markdown summary of test results (pass counts, coverage). May be empty if build failed before tests ran.'
+    required: false
+    default: 'No test summary available.'
+  ci-outcome:
+    description: 'Overall CI outcome: "success" or "failure"'
+    required: true
+  failed-step:
+    description: 'Name of the step that failed (e.g., "build", "test", "lint"). Only used when ci-outcome is failure.'
+    required: false
+    default: ''
+  failure-logs:
+    description: 'Truncated failure logs (max 2000 chars). Only used when ci-outcome is failure.'
+    required: false
+    default: ''
+  max-retries:
+    description: 'Maximum retry count before escalating to Backlog'
+    required: false
+    default: '2'
+  phase:
+    description: 'Validation phase: "a" (build/test/lint) or "b" (adds eval checks). Reserved for future use.'
+    required: false
+    default: 'a'
+
+outputs:
+  pr-url:
+    description: 'URL of the created PR (only on success)'
+    value: ${{ steps.create-pr.outputs.pr_url }}
+  action-taken:
+    description: 'What the gate did: "pr-created", "retry", "escalated", "skipped"'
+    value: ${{ steps.gate-result.outputs.action_taken }}
+
+runs:
+  using: 'composite'
+  steps:
+    # --- Step 1: Extract ticket ID from branch name if not provided ---
+    - name: Extract ticket ID
+      id: extract-ticket
+      shell: bash
+      env:
+        INPUT_TICKET_ID: ${{ inputs.ticket-id }}
+      run: |
+        TICKET_ID="$INPUT_TICKET_ID"
+        if [ -z "$TICKET_ID" ]; then
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          TICKET_ID=$(echo "$BRANCH" | grep -oE 'AMA-[0-9]+' | head -1)
+        fi
+
+        if [ -z "$TICKET_ID" ]; then
+          echo "::warning::Could not extract ticket ID from branch name. Skipping Linear integration."
+          echo "ticket_id=" >> "$GITHUB_OUTPUT"
+          echo "has_ticket=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "ticket_id=$TICKET_ID" >> "$GITHUB_OUTPUT"
+          echo "has_ticket=true" >> "$GITHUB_OUTPUT"
+          echo "Extracted ticket: $TICKET_ID"
+        fi
+
+    # --- Step 2: Look up Linear issue ID from identifier ---
+    - name: Resolve Linear issue
+      id: resolve-issue
+      if: steps.extract-ticket.outputs.has_ticket == 'true'
+      shell: bash
+      env:
+        LINEAR_API_KEY: ${{ inputs.linear-api-key }}
+        TICKET_ID: ${{ steps.extract-ticket.outputs.ticket_id }}
+      run: |
+        # MyAmaka team ID in Linear
+        RESPONSE=$(curl -s --fail-with-body -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d "{\"query\": \"query { issueSearch(filter: { team: { id: { eq: \\\"6c2d1065-85ae-4402-b8ac-64b8530dd663\\\" } }, number: { eq: ${TICKET_ID#AMA-} } }) { nodes { id identifier } } }\"}") || {
+          echo "::warning::Linear API request failed"
+          echo "issue_id=" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+
+        ISSUE_ID=$(echo "$RESPONSE" | jq -r '.data.issueSearch.nodes[0].id // empty')
+
+        if [ -z "$ISSUE_ID" ]; then
+          echo "::warning::Could not find Linear issue $TICKET_ID"
+          echo "issue_id=" >> "$GITHUB_OUTPUT"
+        else
+          echo "issue_id=$ISSUE_ID" >> "$GITHUB_OUTPUT"
+          echo "Resolved $TICKET_ID -> $ISSUE_ID"
+        fi
+
+    # --- Step 3: Get retry count from existing comments ---
+    - name: Get retry count
+      id: retry-count
+      if: steps.resolve-issue.outputs.issue_id != '' && inputs.ci-outcome == 'failure'
+      shell: bash
+      env:
+        LINEAR_API_KEY: ${{ inputs.linear-api-key }}
+        ISSUE_ID: ${{ steps.resolve-issue.outputs.issue_id }}
+      run: |
+        RESPONSE=$(curl -s -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d "{\"query\": \"query { issue(id: \\\"$ISSUE_ID\\\") { comments { nodes { body } } } }\"}")
+
+        # Find highest retry count in existing comments
+        CURRENT_RETRY=$(echo "$RESPONSE" | jq -r '.data.issue.comments.nodes[].body' \
+          | grep -oE '\[retry:[0-9]+/' | grep -oE '[0-9]+' | sort -n | tail -1)
+
+        if [ -z "$CURRENT_RETRY" ]; then
+          CURRENT_RETRY=0
+        fi
+
+        NEXT_RETRY=$((CURRENT_RETRY + 1))
+        echo "current=$CURRENT_RETRY" >> "$GITHUB_OUTPUT"
+        echo "next=$NEXT_RETRY" >> "$GITHUB_OUTPUT"
+        echo "Current retry: $CURRENT_RETRY, next: $NEXT_RETRY"
+
+    # --- Step 4a: On SUCCESS — Create PR ---
+    - name: Create PR
+      id: create-pr
+      if: inputs.ci-outcome == 'success' && steps.extract-ticket.outputs.has_ticket == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TICKET_ID: ${{ steps.extract-ticket.outputs.ticket_id }}
+        TEST_SUMMARY: ${{ inputs.test-results-summary }}
+      run: |
+        PR_BODY=$(cat <<EOF
+        ## Summary
+        Auto-validated PR for [$TICKET_ID](https://linear.app/amakaflow/issue/$TICKET_ID)
+
+        ## CI Results
+        $TEST_SUMMARY
+
+        ## Validation
+        All build, test, and lint checks passed.
+
+        ---
+        Generated by AmakaFlow Validation Gate
+        EOF
+        )
+
+        PR_URL=$(gh pr create \
+          --title "$TICKET_ID — Auto-validated by CI" \
+          --body "$PR_BODY" \
+          --label "Auto-validated by CI" 2>&1) || true
+
+        # gh pr create exits non-zero if PR already exists
+        if echo "$PR_URL" | grep -q "already exists"; then
+          EXISTING_PR=$(gh pr list --head "$(git rev-parse --abbrev-ref HEAD)" --json url --jq '.[0].url')
+          echo "pr_url=$EXISTING_PR" >> "$GITHUB_OUTPUT"
+          echo "PR already exists: $EXISTING_PR"
+        elif echo "$PR_URL" | grep -q "https://"; then
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Created PR: $PR_URL"
+        else
+          echo "::warning::Failed to create PR: $PR_URL"
+          echo "pr_url=" >> "$GITHUB_OUTPUT"
+        fi
+
+    # --- Step 4b: On SUCCESS — Post Linear comment ---
+    - name: Comment on Linear (success)
+      if: inputs.ci-outcome == 'success' && steps.resolve-issue.outputs.issue_id != ''
+      shell: bash
+      env:
+        LINEAR_API_KEY: ${{ inputs.linear-api-key }}
+        ISSUE_ID: ${{ steps.resolve-issue.outputs.issue_id }}
+        TICKET_ID: ${{ steps.extract-ticket.outputs.ticket_id }}
+        REPO_NAME: ${{ inputs.repo-name }}
+        PR_URL: ${{ steps.create-pr.outputs.pr_url }}
+        TEST_SUMMARY: ${{ inputs.test-results-summary }}
+      run: |
+        PR_LINK=""
+        if [ -n "$PR_URL" ]; then
+          PR_LINK="PR created: $PR_URL"
+        fi
+
+        BODY=$(cat <<EOF
+        **CI passed** on \`$REPO_NAME\`. $PR_LINK
+
+        $TEST_SUMMARY
+
+        [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        EOF
+        )
+
+        # Escape for JSON
+        BODY_JSON=$(echo "$BODY" | jq -Rsa .)
+
+        curl -s -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"$ISSUE_ID\\\", body: $BODY_JSON }) { success } }\"}"
+
+        echo "Posted success comment to $TICKET_ID"
+
+    # --- Step 5a: On FAILURE (retries remaining) — Bounce back to Todo ---
+    - name: Comment on Linear (failure - retry)
+      if: >
+        inputs.ci-outcome == 'failure'
+        && steps.resolve-issue.outputs.issue_id != ''
+        && steps.retry-count.outputs.next <= inputs.max-retries
+      shell: bash
+      env:
+        LINEAR_API_KEY: ${{ inputs.linear-api-key }}
+        ISSUE_ID: ${{ steps.resolve-issue.outputs.issue_id }}
+        TICKET_ID: ${{ steps.extract-ticket.outputs.ticket_id }}
+        REPO_NAME: ${{ inputs.repo-name }}
+        FAILED_STEP: ${{ inputs.failed-step }}
+        FAILURE_LOGS: ${{ inputs.failure-logs }}
+        NEXT_RETRY: ${{ steps.retry-count.outputs.next }}
+        MAX_RETRIES: ${{ inputs.max-retries }}
+      run: |
+        # Truncate logs to 2000 chars
+        TRUNCATED_LOGS="${FAILURE_LOGS:0:2000}"
+        if [ ${#FAILURE_LOGS} -gt 2000 ]; then
+          TRUNCATED_LOGS="${TRUNCATED_LOGS}... (truncated)"
+        fi
+
+        BODY=$(cat <<EOF
+        **CI failed** on \`$REPO_NAME\` — step: \`$FAILED_STEP\`
+        [retry:$NEXT_RETRY/$MAX_RETRIES]
+
+        [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+        \`\`\`
+        $TRUNCATED_LOGS
+        \`\`\`
+        EOF
+        )
+
+        BODY_JSON=$(echo "$BODY" | jq -Rsa .)
+
+        # Post comment
+        curl -s -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"$ISSUE_ID\\\", body: $BODY_JSON }) { success } }\"}"
+
+        # Move back to Todo (stateId = MyAmaka "Todo" status)
+        curl -s -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d '{"query": "mutation { issueUpdate(id: \"'"$ISSUE_ID"'\", input: { stateId: \"1e077984-ac88-4a3d-b162-36b660dba604\" }) { success } }"}'
+
+        echo "Bounced $TICKET_ID back to Todo for retry ($NEXT_RETRY/$MAX_RETRIES)"
+
+    # --- Step 5b: On FAILURE (max retries exceeded) — Escalate to Backlog ---
+    - name: Comment on Linear (failure - escalate)
+      if: >
+        inputs.ci-outcome == 'failure'
+        && steps.resolve-issue.outputs.issue_id != ''
+        && steps.retry-count.outputs.next > inputs.max-retries
+      shell: bash
+      env:
+        LINEAR_API_KEY: ${{ inputs.linear-api-key }}
+        ISSUE_ID: ${{ steps.resolve-issue.outputs.issue_id }}
+        TICKET_ID: ${{ steps.extract-ticket.outputs.ticket_id }}
+        REPO_NAME: ${{ inputs.repo-name }}
+        FAILED_STEP: ${{ inputs.failed-step }}
+        FAILURE_LOGS: ${{ inputs.failure-logs }}
+        NEXT_RETRY: ${{ steps.retry-count.outputs.next }}
+        MAX_RETRIES: ${{ inputs.max-retries }}
+      run: |
+        TRUNCATED_LOGS="${FAILURE_LOGS:0:2000}"
+        if [ ${#FAILURE_LOGS} -gt 2000 ]; then
+          TRUNCATED_LOGS="${TRUNCATED_LOGS}... (truncated)"
+        fi
+
+        BODY=$(cat <<EOF
+        **CI failed** on \`$REPO_NAME\` — step: \`$FAILED_STEP\`
+        [retry:$NEXT_RETRY/$MAX_RETRIES]
+
+        **Max retries ($MAX_RETRIES) exceeded. Moving to Backlog for human attention.**
+
+        [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+        \`\`\`
+        $TRUNCATED_LOGS
+        \`\`\`
+        EOF
+        )
+
+        BODY_JSON=$(echo "$BODY" | jq -Rsa .)
+
+        # Post comment
+        curl -s -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"$ISSUE_ID\\\", body: $BODY_JSON }) { success } }\"}"
+
+        # Move to Backlog (stateId = MyAmaka "Backlog" status)
+        curl -s -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d '{"query": "mutation { issueUpdate(id: \"'"$ISSUE_ID"'\", input: { stateId: \"3f5c4d8d-315e-4893-a572-5bf6fca8b178\" }) { success } }"}'
+
+        # Add Bug label (fetch existing labels first to avoid overwriting)
+        # Bug label ID in Linear: 01354325-7bd1-4679-9158-b4269e1e06ed
+        LABEL_RESPONSE=$(curl -s --fail-with-body -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d "{\"query\": \"query { issue(id: \\\"$ISSUE_ID\\\") { labels { nodes { id } } } }\"}") || true
+
+        EXISTING_LABELS=$(echo "$LABEL_RESPONSE" | jq -r '
+          [(.data.issue.labels.nodes // [])[].id] + ["01354325-7bd1-4679-9158-b4269e1e06ed"]
+          | unique | map("\"" + . + "\"") | join(",")' 2>/dev/null)
+
+        # Fallback: if label fetch failed, just set Bug label alone
+        if [ -z "$EXISTING_LABELS" ]; then
+          EXISTING_LABELS='"01354325-7bd1-4679-9158-b4269e1e06ed"'
+        fi
+
+        curl -s -X POST https://api.linear.app/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $LINEAR_API_KEY" \
+          -d "{\"query\": \"mutation { issueUpdate(id: \\\"$ISSUE_ID\\\", input: { labelIds: [$EXISTING_LABELS] }) { success } }\"}"
+
+        echo "Escalated $TICKET_ID to Backlog with Bug label (retries exhausted)"
+
+    # --- Step 6: Set output ---
+    - name: Set gate result
+      id: gate-result
+      if: always()
+      shell: bash
+      env:
+        HAS_TICKET: ${{ steps.extract-ticket.outputs.has_ticket }}
+        CI_OUTCOME: ${{ inputs.ci-outcome }}
+        NEXT_RETRY: ${{ steps.retry-count.outputs.next }}
+        MAX_RETRIES: ${{ inputs.max-retries }}
+      run: |
+        if [ "$HAS_TICKET" != "true" ]; then
+          echo "action_taken=skipped" >> "$GITHUB_OUTPUT"
+        elif [ "$CI_OUTCOME" == "success" ]; then
+          echo "action_taken=pr-created" >> "$GITHUB_OUTPUT"
+        elif [ "$NEXT_RETRY" -gt "$MAX_RETRIES" ] 2>/dev/null; then
+          echo "action_taken=escalated" >> "$GITHUB_OUTPUT"
+        else
+          echo "action_taken=retry" >> "$GITHUB_OUTPUT"
+        fi
