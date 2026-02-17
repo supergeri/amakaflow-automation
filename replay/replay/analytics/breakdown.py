@@ -5,8 +5,10 @@ Shows corruption rates grouped by different dimensions.
 
 from dataclasses import dataclass
 from pathlib import Path
-import json
 from collections import defaultdict
+from typing import Union, List
+
+from .utils import load_metadata
 
 
 @dataclass
@@ -57,22 +59,7 @@ class DeviceBreakdown:
         return (self.corrupt_runs / self.total_runs) * 100
 
 
-def find_capture_dirs(base_path: Path) -> list[Path]:
-    """Find all capture directories under base_path."""
-    if not base_path.exists():
-        return []
-    return [d for d in base_path.rglob("*") if d.is_dir() and (d / "metadata.json").exists()]
-
-
-def load_metadata(metadata_path: Path) -> dict | None:
-    """Load metadata.json file."""
-    try:
-        return json.loads(metadata_path.read_text())
-    except (json.JSONDecodeError, FileNotFoundError):
-        return None
-
-
-def breakdown_report(capture_dir: str | Path) -> dict:
+def breakdown_report(capture_dir: Union[str, Path]) -> dict:
     """Generate breakdown reports by type, source, and device.
 
     Args:
@@ -83,11 +70,22 @@ def breakdown_report(capture_dir: str | Path) -> dict:
     """
     base_path = Path(capture_dir)
 
+    # Validate input
+    if not base_path.exists():
+        return {"by_type": [], "by_source": [], "by_device": []}
+    if not base_path.is_dir():
+        return {"by_type": [], "by_source": [], "by_device": []}
+
     type_data: dict[str, dict] = defaultdict(lambda: {"total": 0, "corrupt": 0})
     source_data: dict[str, dict] = defaultdict(lambda: {"total": 0, "corrupt": 0})
     device_data: dict[str, dict] = defaultdict(lambda: {"total": 0, "corrupt": 0})
 
-    for metadata_file in base_path.rglob("metadata.json"):
+    try:
+        metadata_files = base_path.rglob("metadata.json")
+    except OSError:
+        return {"by_type": [], "by_source": [], "by_device": []}
+
+    for metadata_file in metadata_files:
         metadata = load_metadata(metadata_file)
         if not metadata:
             continue

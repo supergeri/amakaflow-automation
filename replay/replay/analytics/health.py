@@ -5,8 +5,10 @@ Shows per-hop clean rate and average latency.
 
 from dataclasses import dataclass
 from pathlib import Path
-import json
 from collections import defaultdict
+from typing import Union, List
+
+from .utils import load_metadata
 
 
 @dataclass
@@ -26,22 +28,7 @@ class HopHealth:
         return (self.clean_runs / self.total_runs) * 100
 
 
-def find_capture_dirs(base_path: Path) -> list[Path]:
-    """Find all capture directories under base_path."""
-    if not base_path.exists():
-        return []
-    return [d for d in base_path.rglob("*") if d.is_dir() and (d / "metadata.json").exists()]
-
-
-def load_metadata(metadata_path: Path) -> dict | None:
-    """Load metadata.json file."""
-    try:
-        return json.loads(metadata_path.read_text())
-    except (json.JSONDecodeError, FileNotFoundError):
-        return None
-
-
-def health_report(capture_dir: str | Path) -> list[HopHealth]:
+def health_report(capture_dir: Union[str, Path]) -> List[HopHealth]:
     """Generate per-hop health report.
 
     Args:
@@ -51,9 +38,21 @@ def health_report(capture_dir: str | Path) -> list[HopHealth]:
         List of HopHealth objects sorted by hop name
     """
     base_path = Path(capture_dir)
+    
+    # Validate input
+    if not base_path.exists():
+        return []
+    if not base_path.is_dir():
+        return []
+    
     hop_data: dict[str, dict] = defaultdict(lambda: {"total": 0, "clean": 0, "latencies": []})
 
-    for metadata_file in base_path.rglob("metadata.json"):
+    try:
+        metadata_files = base_path.rglob("metadata.json")
+    except OSError:
+        return []
+
+    for metadata_file in metadata_files:
         metadata = load_metadata(metadata_file)
         if not metadata:
             continue
@@ -62,6 +61,9 @@ def health_report(capture_dir: str | Path) -> list[HopHealth]:
         diff_summary = metadata.get("diff_summary", {})
 
         for hop_name, hop_info in timing.items():
+            # Validate hop_info is a dict before accessing
+            if not isinstance(hop_info, dict):
+                continue
             latency_ms = hop_info.get("latency_ms", 0)
             hop_data[hop_name]["total"] += 1
             hop_data[hop_name]["latencies"].append(latency_ms)

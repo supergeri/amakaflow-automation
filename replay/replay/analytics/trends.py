@@ -5,9 +5,14 @@ Shows weekly corruption rate over specified time period.
 
 from dataclasses import dataclass
 from pathlib import Path
-import json
 from collections import defaultdict
 from datetime import datetime, timedelta
+import logging
+from typing import Union, List, Optional
+
+from .utils import load_metadata
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -26,33 +31,31 @@ class WeeklyTrend:
         return (self.corrupt_runs / self.total_runs) * 100
 
 
-def find_capture_dirs(base_path: Path) -> list[Path]:
-    """Find all capture directories under base_path."""
-    if not base_path.exists():
-        return []
-    return [d for d in base_path.rglob("*") if d.is_dir() and (d / "metadata.json").exists()]
-
-
-def load_metadata(metadata_path: Path) -> dict | None:
-    """Load metadata.json file."""
+def get_week_key(timestamp: float) -> Optional[str]:
+    """Get ISO week start date for a timestamp.
+    
+    Args:
+        timestamp: Unix timestamp in seconds
+        
+    Returns:
+        ISO format date string (YYYY-MM-DD) or None if invalid
+    """
     try:
-        return json.loads(metadata_path.read_text())
-    except (json.JSONDecodeError, FileNotFoundError):
+        # Validate timestamp is numeric
+        ts = float(timestamp)
+        dt = datetime.fromtimestamp(ts)
+    except (ValueError, OSError, OverflowError, TypeError):
+        logger.warning(f"Invalid timestamp: {timestamp}")
         return None
-
-
-def get_week_key(timestamp: float) -> str:
-    """Get ISO week start date for a timestamp."""
-    dt = datetime.fromtimestamp(timestamp)
     # Get Monday of the week
     monday = dt - timedelta(days=dt.weekday())
     return monday.strftime("%Y-%m-%d")
 
 
 def trend_report(
-    capture_dir: str | Path,
+    capture_dir: Union[str, Path],
     weeks: int = 8,
-) -> list[WeeklyTrend]:
+) -> List[WeeklyTrend]:
     """Generate weekly corruption trend report.
 
     Args:
@@ -63,9 +66,21 @@ def trend_report(
         List of WeeklyTrend objects sorted by week
     """
     base_path = Path(capture_dir)
+
+    # Validate input
+    if not base_path.exists():
+        return []
+    if not base_path.is_dir():
+        return []
+
     week_data: dict[str, dict] = defaultdict(lambda: {"total": 0, "corrupt": 0})
 
-    for metadata_file in base_path.rglob("metadata.json"):
+    try:
+        metadata_files = base_path.rglob("metadata.json")
+    except OSError:
+        return []
+
+    for metadata_file in metadata_files:
         metadata = load_metadata(metadata_file)
         if not metadata:
             continue
@@ -75,6 +90,9 @@ def trend_report(
             continue
 
         week_key = get_week_key(timestamp)
+        if week_key is None:
+            continue
+            
         week_data[week_key]["total"] += 1
 
         # Check if run has corruption
