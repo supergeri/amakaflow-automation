@@ -1,0 +1,202 @@
+# Android Navigation Flow
+# Validates all bottom navigation tabs work correctly
+# More comprehensive than smoke.yaml - tests all navigation paths
+#
+# Run: maestro test flows/android/navigation.yaml
+
+appId: com.amakaflow.companion
+
+onFlowError:
+  - takeScreenshot: artifacts/screenshots/android-navigation-error
+
+env:
+  # UITEST_MODE: "true" enables test mode for auth bypass
+  UITEST_MODE: "true"
+  # UITEST_AUTH_SECRET: auth bypass secret (must be set via CI/CD - no defaults)
+  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET}
+  # UITEST_USER_ID: test user identifier (optional, defaults to null if not set)
+  UITEST_USER_ID: ${UITEST_USER_ID}
+  UITEST_SKIP_ONBOARDING: "true"
+
+---
+
+# Launch app with test mode
+- launchApp:
+    clearState: true
+    stopApp: true
+    arguments:
+      UITEST_MODE: ${UITEST_MODE}
+      UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET}
+      UITEST_USER_ID: ${UITEST_USER_ID}
+      UITEST_SKIP_ONBOARDING: ${UITEST_SKIP_ONBOARDING}
+
+# Dismiss Android system dialogs
+- waitForAnimationToEnd
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "While using the app"
+    optional: true
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 15000
+
+- takeScreenshot: artifacts/screenshots/android-navigation-01-home
+
+# ============================================
+# Test: Home Tab
+# ============================================
+- assertVisible:
+    id: "home_screen"
+- assertVisible:
+    id: "nav_home"
+
+- takeScreenshot: artifacts/screenshots/android-navigation-02-home-verified
+
+# ============================================
+# Test: Workouts Tab
+# ============================================
+- tapOn:
+    id: "nav_workouts"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "workouts_screen"
+    timeout: 5000
+
+- assertVisible:
+    id: "workouts_screen"
+- assertVisible:
+    id: "nav_workouts"
+
+- takeScreenshot: artifacts/screenshots/android-navigation-03-workouts
+
+# Verify we're on correct tab (home should not be visible)
+- assertNotVisible:
+    id: "home_screen"
+    optional: true
+
+# ============================================
+# Test: Calendar Tab
+# ============================================
+- tapOn:
+    id: "nav_calendar"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "calendar_screen"
+    timeout: 5000
+
+- assertVisible:
+    id: "calendar_screen"
+- assertVisible:
+    id: "nav_calendar"
+
+- takeScreenshot: artifacts/screenshots/android-navigation-04-calendar
+
+# ============================================
+# Test: History Tab
+# ============================================
+- tapOn:
+    id: "nav_history"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "history_screen"
+    timeout: 5000
+
+- assertVisible:
+    id: "history_screen"
+- assertVisible:
+    id: "nav_history"
+
+- takeScreenshot: artifacts/screenshots/android-navigation-05-history
+
+# ============================================
+# Test: More Tab
+# ============================================
+- tapOn:
+    id: "nav_more"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "more_screen"
+    timeout: 5000
+
+- assertVisible:
+    id: "more_screen"
+- assertVisible:
+    id: "nav_more"
+
+- takeScreenshot: artifacts/screenshots/android-navigation-06-more
+
+# ============================================
+# Test: Return to Home (quick navigation)
+# ============================================
+- tapOn:
+    id: "nav_home"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 5000
+
+# ============================================
+# Test: Rapid tab switching
+# ============================================
+- tapOn:
+    id: "nav_workouts"
+- waitForAnimationToEnd
+- tapOn:
+    id: "nav_calendar"
+- waitForAnimationToEnd
+- tapOn:
+    id: "nav_history"
+- waitForAnimationToEnd
+- tapOn:
+    id: "nav_more"
+- waitForAnimationToEnd
+- tapOn:
+    id: "nav_home"
+
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 5000
+
+- takeScreenshot: artifacts/screenshots/android-navigation-07-rapid-switch
+
+# ============================================
+# Final assertions
+# ============================================
+- assertVisible:
+    id: "home_screen"
+- assertVisible:
+    id: "bottom_navigation"
+- assertVisible:
+    id: "nav_home"
+- assertVisible:
+    id: "nav_workouts"
+- assertVisible:
+    id: "nav_calendar"
+- assertVisible:
+    id: "nav_history"
+- assertVisible:
+    id: "nav_more"
+- assertNotVisible:
+    id: "error_view"
+    optional: true
+- assertNotVisible:
+    id: "crash_dialog"
+    optional: true
+
+- takeScreenshot: artifacts/screenshots/android-navigation-08-complete
