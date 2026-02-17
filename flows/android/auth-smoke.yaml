@@ -1,0 +1,113 @@
+# Android Auth Smoke Flow
+# Tests auth bypass using UITEST_* environment variables (same pattern as iOS)
+# This is a lightweight auth test that skips the login UI
+#
+# Run: maestro test flows/android/auth-smoke.yaml
+#
+# Environment variables:
+#   - UITEST_MODE: "true" (enables test mode)
+#   - UITEST_AUTH_SECRET: auth bypass secret
+#   - UITEST_USER_ID: test user identifier (optional)
+#   - UITEST_SKIP_ONBOARDING: "true" (skip onboarding flow)
+
+appId: com.amakaflow.companion
+
+onFlowError:
+  - takeScreenshot: artifacts/screenshots/android-auth-smoke-error
+
+env:
+  UITEST_MODE: "true"
+  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET:-test-secret-123}
+  UITEST_USER_ID: ${UITEST_USER_ID:-smoke-test-user}
+  UITEST_SKIP_ONBOARDING: "true"
+
+---
+
+# Launch app with auth bypass env vars
+- launchApp:
+    clearState: true
+    stopApp: true
+    arguments:
+      UITEST_MODE: ${UITEST_MODE}
+      UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET}
+      UITEST_USER_ID: ${UITEST_USER_ID}
+      UITEST_SKIP_ONBOARDING: ${UITEST_SKIP_ONBOARDING}
+
+# Dismiss Android system dialogs
+- waitForAnimationToEnd
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "While using the app"
+    optional: true
+- tapOn:
+    text: "Don't allow"
+    optional: true
+
+# Wait for home screen - should appear immediately with auth bypass
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 15000
+
+- takeScreenshot: artifacts/screenshots/android-auth-smoke-01-home
+
+# Verify we're on home screen (not stuck on login)
+- assertVisible:
+    id: "home_screen"
+
+# Verify bottom navigation is present
+- assertVisible:
+    id: "bottom_navigation"
+
+# Navigate to workouts to verify auth state persists
+- tapOn:
+    id: "nav_workouts"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "workouts_screen"
+    timeout: 5000
+
+- takeScreenshot: artifacts/screenshots/android-auth-smoke-02-workouts
+
+# Navigate to history to verify auth state persists
+- tapOn:
+    id: "nav_history"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "history_screen"
+    timeout: 5000
+
+- takeScreenshot: artifacts/screenshots/android-auth-smoke-03-history
+
+# Return to home
+- tapOn:
+    id: "nav_home"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 5000
+
+- takeScreenshot: artifacts/screenshots/android-auth-smoke-04-complete
+
+# Final assertions
+- assertVisible:
+    id: "home_screen"
+- assertVisible:
+    id: "bottom_navigation"
+- assertNotVisible:
+    id: "login_screen"
+    optional: true
+- assertNotVisible:
+    id: "error_view"
+    optional: true
+- assertNotVisible:
+    id: "crash_dialog"
+    optional: true

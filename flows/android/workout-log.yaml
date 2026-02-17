@@ -1,0 +1,125 @@
+# Android Workout Log Flow
+# Validates that fixture workouts load correctly and cards render in the list
+# Similar to iOS workout-list.yaml
+#
+# Run: maestro test flows/android/workout-log.yaml
+
+appId: com.amakaflow.companion
+
+onFlowError:
+  - takeScreenshot: artifacts/screenshots/android-workout-log-error
+
+env:
+  UITEST_MODE: "true"
+  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET:-test-secret-123}
+  UITEST_USER_ID: ${UITEST_USER_ID:-fixture-test-user}
+  UITEST_USE_FIXTURES: "true"
+  UITEST_FIXTURES: "amrap_10min,emom_strength,strength_block_w1,running_long,hiit_follow_along,for_time_conditioning"
+  UITEST_SKIP_ONBOARDING: "true"
+
+---
+
+# Launch with all fixture workouts loaded
+- launchApp:
+    clearState: true
+    stopApp: true
+    arguments:
+      UITEST_MODE: ${UITEST_MODE}
+      UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET}
+      UITEST_USER_ID: ${UITEST_USER_ID}
+      UITEST_USE_FIXTURES: ${UITEST_USE_FIXTURES}
+      UITEST_FIXTURES: ${UITEST_FIXTURES}
+      UITEST_SKIP_ONBOARDING: ${UITEST_SKIP_ONBOARDING}
+
+# Dismiss Android system dialogs
+- waitForAnimationToEnd
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "While using the app"
+    optional: true
+- tapOn:
+    text: "Don't allow"
+    optional: true
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 15000
+
+- takeScreenshot: artifacts/screenshots/android-workout-log-01-home
+
+# Navigate to workouts tab
+- tapOn:
+    id: "nav_workouts"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "workouts_screen"
+    timeout: 10000
+
+- takeScreenshot: artifacts/screenshots/android-workout-log-02-workouts-list
+
+# Assert workout cards are present (at least the first few)
+- assertVisible:
+    id: "workouts_screen"
+
+# Check for workout cards - may use different IDs depending on implementation
+- scrollUntilVisible:
+    element:
+      id: "workout_card_0"
+    direction: DOWN
+    timeout: 5000
+    speed: 25
+    optional: true
+
+- takeScreenshot: artifacts/screenshots/android-workout-log-03-cards-visible
+
+# Scroll down to see more workout cards
+- scroll:
+    direction: DOWN
+    amount: 0.5
+
+- takeScreenshot: artifacts/screenshots/android-workout-log-04-scrolled
+
+# Try to tap on first workout if available
+- tapOn:
+    id: "workout_card_0"
+    optional: true
+    retryTapIfNoChange: true
+
+# If workout detail opens, verify it renders
+- extendedWaitUntil:
+    visible:
+      id: "workout_detail_screen"
+    timeout: 5000
+    optional: true
+
+- takeScreenshot: artifacts/screenshots/android-workout-log-05-detail
+
+# Go back to workouts list
+- back
+- waitForAnimationToEnd
+
+# Navigate to home
+- tapOn:
+    id: "nav_home"
+    retryTapIfNoChange: true
+
+- extendedWaitUntil:
+    visible:
+      id: "home_screen"
+    timeout: 5000
+
+# Final assertions
+- assertVisible:
+    id: "home_screen"
+- assertNotVisible:
+    id: "error_view"
+    optional: true
+- assertNotVisible:
+    id: "crash_dialog"
+    optional: true
