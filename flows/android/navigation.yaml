@@ -10,9 +10,12 @@ onFlowError:
   - takeScreenshot: artifacts/screenshots/android-navigation-error
 
 env:
+  # UITEST_MODE: "true" enables test mode for auth bypass
   UITEST_MODE: "true"
-  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET:-test-secret-123}
-  UITEST_USER_ID: ${UITEST_USER_ID:-nav-test-user}
+  # UITEST_AUTH_SECRET: auth bypass secret (must be set via CI/CD - no defaults)
+  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET}
+  # UITEST_USER_ID: test user identifier (optional, defaults to null if not set)
+  UITEST_USER_ID: ${UITEST_USER_ID}
   UITEST_SKIP_ONBOARDING: "true"
 
 ---
@@ -152,12 +155,16 @@ env:
 # ============================================
 - tapOn:
     id: "nav_workouts"
+- waitForAnimationToEnd
 - tapOn:
     id: "nav_calendar"
+- waitForAnimationToEnd
 - tapOn:
     id: "nav_history"
+- waitForAnimationToEnd
 - tapOn:
     id: "nav_more"
+- waitForAnimationToEnd
 - tapOn:
     id: "nav_home"
 

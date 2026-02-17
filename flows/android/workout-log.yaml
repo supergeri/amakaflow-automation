@@ -10,10 +10,15 @@ onFlowError:
   - takeScreenshot: artifacts/screenshots/android-workout-log-error
 
 env:
+  # UITEST_MODE: "true" enables test mode for auth bypass
   UITEST_MODE: "true"
-  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET:-test-secret-123}
-  UITEST_USER_ID: ${UITEST_USER_ID:-fixture-test-user}
+  # UITEST_AUTH_SECRET: auth bypass secret (must be set via CI/CD - no defaults)
+  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET}
+  # UITEST_USER_ID: test user identifier (optional, defaults to null if not set)
+  UITEST_USER_ID: ${UITEST_USER_ID}
+  # UITEST_USE_FIXTURES: "true" loads fixture workouts instead of real data
   UITEST_USE_FIXTURES: "true"
+  # UITEST_FIXTURES: comma-separated list of workout fixture names to load
   UITEST_FIXTURES: "amrap_10min,emom_strength,strength_block_w1,running_long,hiit_follow_along,for_time_conditioning"
   UITEST_SKIP_ONBOARDING: "true"
 
@@ -63,11 +68,14 @@ env:
 
 - takeScreenshot: artifacts/screenshots/android-workout-log-02-workouts-list
 
-# Assert workout cards are present (at least the first few)
+# Assert workout list is visible (required - we need this screen to proceed)
 - assertVisible:
     id: "workouts_screen"
 
 # Check for workout cards - may use different IDs depending on implementation
+# Note: scrollUntilVisible is optional because different device sizes may not
+# have all cards visible initially. The required assertion above verifies the
+# screen loads correctly, while this optional scroll handles device variability.
 - scrollUntilVisible:
     element:
       id: "workout_card_0"

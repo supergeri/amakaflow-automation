@@ -16,9 +16,12 @@ onFlowError:
   - takeScreenshot: artifacts/screenshots/android-auth-smoke-error
 
 env:
+  # UITEST_MODE: "true" enables test mode for auth bypass
   UITEST_MODE: "true"
-  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET:-test-secret-123}
-  UITEST_USER_ID: ${UITEST_USER_ID:-smoke-test-user}
+  # UITEST_AUTH_SECRET: auth bypass secret (must be set via CI/CD - no defaults)
+  UITEST_AUTH_SECRET: ${UITEST_AUTH_SECRET}
+  # UITEST_USER_ID: test user identifier (optional, defaults to null if not set)
+  UITEST_USER_ID: ${UITEST_USER_ID}
   UITEST_SKIP_ONBOARDING: "true"
 
 ---
