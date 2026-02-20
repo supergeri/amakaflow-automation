@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "surfaces": {
+    "web": {
+      "screens": [
+        "dashboard",
+        "workout-builder",
+        "workout-detail",
+        "workout-log-active",
+        "kb-cards-list",
+        "kb-card-detail",
+        "kb-card-create",
+        "kb-card-edit",
+        "chat",
+        "settings",
+        "instagram-import",
+        "instagram-import-settings",
+        "profile",
+        "auth-login",
+        "auth-signup",
+        "empty-state-no-workouts",
+        "empty-state-no-kb-cards"
+      ],
+      "ai_features": [
+        "workout-generation",
+        "kb-summarise",
+        "kb-tag-discover",
+        "kb-relationships",
+        "chat-response-quality"
+      ],
+      "edge_states": [
+        "session-expiry-mid-flow",
+        "loading-timeout",
+        "concurrent-edit",
+        "empty-form-submit",
+        "error-state-api-down"
+      ]
+    },
+    "ios": {
+      "screens": [],
+      "ai_features": [],
+      "edge_states": [],
+      "note": "Phase 2"
+    },
+    "android": {
+      "screens": [],
+      "ai_features": [],
+      "edge_states": [],
+      "note": "Phase 2"
+    },
+    "garmin": {
+      "data_events": [
+        "sync-workout-complete",
+        "sync-mid-workout-disconnect",
+        "sync-duplicate-workout",
+        "sync-zero-duration",
+        "sync-future-timestamp",
+        "sync-corrupt-gps",
+        "sync-extreme-heart-rate",
+        "sync-partial-payload"
+      ],
+      "note": "Phase 1: data emitter only"
+    }
+  },
+  "explored": {},
+  "last_updated": null
+}

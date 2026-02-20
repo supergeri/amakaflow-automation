@@ -1,0 +1,77 @@
+{
+  "version": "1.0",
+  "directives": [
+    {
+      "id": "submit-empty-fields",
+      "description": "Navigate to a form and attempt to submit it with all fields empty",
+      "weight": 0.8,
+      "applicable_surfaces": ["workout-builder", "kb-card-create", "auth-signup"]
+    },
+    {
+      "id": "rapid-tap-before-load",
+      "description": "Click buttons repeatedly before the page has finished loading",
+      "weight": 0.7,
+      "applicable_surfaces": ["all"]
+    },
+    {
+      "id": "background-foreground-mid-flow",
+      "description": "Navigate away to another browser tab mid-flow, then return",
+      "weight": 0.9,
+      "applicable_surfaces": ["workout-log-active", "kb-card-edit", "instagram-import"]
+    },
+    {
+      "id": "kill-network-during-ai-request",
+      "description": "Trigger an AI feature then immediately navigate away before it completes",
+      "weight": 0.9,
+      "applicable_surfaces": ["workout-builder", "kb-card-create", "chat"]
+    },
+    {
+      "id": "spam-chat",
+      "description": "Send 5+ rapid messages to the chat without waiting for responses",
+      "weight": 0.7,
+      "applicable_surfaces": ["chat"]
+    },
+    {
+      "id": "exceed-content-length",
+      "description": "Paste extremely long content (5000+ characters) into a text field",
+      "weight": 0.8,
+      "applicable_surfaces": ["kb-card-create", "kb-card-edit", "chat"]
+    },
+    {
+      "id": "log-zero-reps",
+      "description": "Attempt to log a workout set with zero reps or zero weight",
+      "weight": 0.9,
+      "applicable_surfaces": ["workout-log-active"]
+    },
+    {
+      "id": "log-extreme-values",
+      "description": "Enter extreme values: 9999 reps, 9999kg weight, -5 sets",
+      "weight": 0.8,
+      "applicable_surfaces": ["workout-log-active", "workout-builder"]
+    },
+    {
+      "id": "abandon-and-return",
+      "description": "Start a flow, navigate away entirely, then return via back button or direct URL",
+      "weight": 0.9,
+      "applicable_surfaces": ["workout-log-active", "kb-card-create", "instagram-import"]
+    },
+    {
+      "id": "concurrent-edits",
+      "description": "Open the same item in two browser tabs and edit both simultaneously",
+      "weight": 0.7,
+      "applicable_surfaces": ["kb-card-edit", "workout-builder"]
+    },
+    {
+      "id": "explore-freely",
+      "description": "No specific chaos — explore the app naturally as the persona would",
+      "weight": 0.5,
+      "applicable_surfaces": ["all"]
+    },
+    {
+      "id": "break-auth",
+      "description": "Let session expire naturally by waiting, then attempt an action",
+      "weight": 0.6,
+      "applicable_surfaces": ["all"]
+    }
+  ]
+}
