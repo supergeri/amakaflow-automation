@@ -14,7 +14,7 @@ import json
 import logging
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Optional, Union
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -55,8 +55,8 @@ class CaptureMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        capture_dir: str | Path = "./captures",
-        capture_points: dict[tuple[str, str], str] | None = None,
+        capture_dir: Union[str, Path] = "./captures",
+        capture_points: Optional[dict[tuple[str, str], str]] = None,
     ) -> None:
         super().__init__(app)
         self.capture_dir = Path(capture_dir)
@@ -148,7 +148,7 @@ class CaptureMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def _try_parse_json(data: bytes | None) -> Any:
+def _try_parse_json(data: Optional[bytes]) -> Any:
     """Try to parse bytes as JSON, return raw string on failure."""
     if not data:
         return None
