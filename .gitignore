@@ -31,9 +31,12 @@ node_modules/
 poller-state.json
 
 # Chaos Engine runtime artifacts
-chaos/artifacts/screenshots/
-chaos/artifacts/logs/
-chaos/artifacts/reports/
-chaos/memory/personas/
+chaos/artifacts/screenshots/*
+chaos/artifacts/logs/*
+chaos/artifacts/reports/*
+!chaos/artifacts/screenshots/.gitkeep
+!chaos/artifacts/logs/.gitkeep
+!chaos/artifacts/reports/.gitkeep
+chaos/memory/personas/*
 # Keep known_bugs.json tracked (dedup store persists across sessions)
 !chaos/memory/known_bugs.json
