@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
+from typing import Optional, Union
 
 # Header used to activate per-request capture
 CAPTURE_HEADER = "x-replay-capture"
@@ -59,7 +60,7 @@ class CaptureSession:
 def resolve_session(
     headers: dict[str, str],
     default_capture_dir: Path,
-) -> CaptureSession | None:
+) -> Optional[CaptureSession]:
     """Determine if capture is active for this request.
 
     Checks (in order):
@@ -78,7 +79,7 @@ def resolve_session(
     return None
 
 
-def _parse_header(value: str, default_capture_dir: Path) -> CaptureSession | None:
+def _parse_header(value: str, default_capture_dir: Path) -> Optional[CaptureSession]:
     """Parse the X-Replay-Capture header value.
 
     Format: ``session-name=foo``

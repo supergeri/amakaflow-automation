@@ -3,7 +3,7 @@
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from .session import CaptureSession
 
@@ -15,11 +15,11 @@ def write_snapshot(
     endpoint: str,
     method: str,
     request_payload: Any = None,
-    request_headers: dict[str, str] | None = None,
-    response_status: int | None = None,
+    request_headers: Optional[dict[str, str]] = None,
+    response_status: Optional[int] = None,
     response_payload: Any = None,
     streaming: bool = False,
-    chat_context: dict[str, Any] | None = None,
+    chat_context: Optional[dict[str, Any]] = None,
 ) -> Path:
     """Write a single capture snapshot to disk.
 
@@ -45,7 +45,7 @@ def write_snapshot(
     return filepath
 
 
-def _sanitize_headers(headers: dict[str, str] | None) -> dict[str, str] | None:
+def _sanitize_headers(headers: Optional[dict[str, str]]) -> Optional[dict[str, str]]:
     """Remove sensitive headers from captured data."""
     if headers is None:
         return None
