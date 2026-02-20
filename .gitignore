@@ -29,3 +29,11 @@ Thumbs.db
 # Node
 node_modules/
 poller-state.json
+
+# Chaos Engine runtime artifacts
+chaos/artifacts/screenshots/
+chaos/artifacts/logs/
+chaos/artifacts/reports/
+chaos/memory/personas/
+# Keep known_bugs.json tracked (dedup store persists across sessions)
+!chaos/memory/known_bugs.json
