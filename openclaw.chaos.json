@@ -1,0 +1,67 @@
+{
+  "name": "amakaflow-chaos-engine",
+  "description": "Chaos Engine — human-like E2E testing for AmakaFlow (Phase 1: web, nightly, Haiku)",
+  "version": "1.0.0",
+  "models": {
+    "default": {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "maxTokens": 4096,
+      "temperature": 0.7
+    }
+  },
+  "routing": {
+    "default": "default"
+  },
+  "tools": {
+    "browser": {
+      "enabled": true,
+      "headless": true,
+      "timeout": 30000,
+      "viewport": { "width": 1280, "height": 720 }
+    },
+    "exec": {
+      "enabled": true,
+      "timeout": 120000,
+      "shell": "/bin/bash"
+    },
+    "read": {
+      "enabled": true,
+      "allowedPaths": [
+        "chaos/**",
+        "*.md",
+        "*.json"
+      ]
+    },
+    "write": {
+      "enabled": true,
+      "allowedPaths": [
+        "chaos/artifacts/**",
+        "chaos/memory/**"
+      ]
+    }
+  },
+  "environment": {
+    "UI_URL": "http://localhost:3000",
+    "CHAT_API_URL": "http://localhost:8005",
+    "MAPPER_API_URL": "http://localhost:8001",
+    "CALENDAR_API_URL": "http://localhost:8003",
+    "INGESTOR_API_URL": "http://localhost:8004"
+  },
+  "skills": ["chaos/skills/chaos-driver"],
+  "artifacts": {
+    "directory": "chaos/artifacts",
+    "screenshots": "chaos/artifacts/screenshots",
+    "logs": "chaos/artifacts/logs",
+    "reports": "chaos/artifacts/reports"
+  },
+  "mode": "B",
+  "phase": 1,
+  "defaults": {
+    "platform": "web",
+    "parallel": false,
+    "max_steps_per_session": 50,
+    "schedule": "0 23 * * *"
+  }
+}
