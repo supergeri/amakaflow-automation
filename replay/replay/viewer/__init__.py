@@ -4,6 +4,7 @@ Generates an interactive HTML/JS page for viewing captured sessions
 and their diffs across the pipeline.
 """
 
+import html
 import json
 from pathlib import Path
 from typing import Any
@@ -50,12 +51,16 @@ def generate_viewer_html(capture_dir: Path, session_name: str) -> str:
         for d in result.diffs
     ], default=str)
     
+    # Escape </script> tags to prevent breaking out of script context
+    snapshots_json = snapshots_json.replace("</script>", "<\\/script>")
+    diffs_json = diffs_json.replace("</script>", "<\\/script>")
+    
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trace Viewer - {session_name}</title>
+    <title>Trace Viewer - {html.escape(session_name)}</title>
     <style>
         * {{
             box-sizing: border-box;
@@ -288,7 +293,7 @@ def generate_viewer_html(capture_dir: Path, session_name: str) -> str:
 <body>
     <div class="header">
         <h1>
-            Trace Viewer: {session_name}
+            Trace Viewer: {html.escape(session_name)}
             <span class="status {'clean' if result.is_clean else 'corrupted'}">
                 {'✓ CLEAN' if result.is_clean else '✗ CORRUPTED'}
             </span>
@@ -304,7 +309,7 @@ def generate_viewer_html(capture_dir: Path, session_name: str) -> str:
         </div>
         
         <div class="main">
-            {f'<div class="corruption-warning"><span class="icon">⚠</span> First corruption at: <strong>{result.first_corruption_hop}</strong></div>' if result.first_corruption_hop else ''}
+            {f'<div class="corruption-warning"><span class="icon">⚠</span> First corruption at: <strong>{html.escape(result.first_corruption_hop)}</strong></div>' if result.first_corruption_hop else ''}
             
             <div class="summary">
                 <div class="summary-card">

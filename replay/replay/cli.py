@@ -9,6 +9,7 @@ Commands:
   viewer    - Start trace viewer web server
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -81,8 +82,9 @@ def list_sessions(capture_dir: Path):
                 data = json.loads(snapshots[0].read_text())
                 from datetime import datetime
                 first_ts = datetime.fromtimestamp(data.get("timestamp", 0)).strftime("%Y-%m-%d %H:%M")
-            except Exception:
-                pass
+            except (json.JSONDecodeError, OSError, ValueError) as e:
+                logging.warning(f"Failed to read timestamp for {session}: {e}")
+                first_ts = "N/A"
         table.add_row(session, str(len(snapshots)), first_ts)
     
     console.print(table)
@@ -123,7 +125,7 @@ def replay(ctx, session_name: str, capture_dir: Path, device: str, verbose: bool
         for d in capture_dir.iterdir():
             if d.is_dir():
                 console.print(f"  - {d.name}")
-        sys.exit(1)
+        raise click.ClickException(f"No snapshots found for session: {session_name}")
     
     # Header
     status = "[green]CLEAN[/green]" if result.is_clean else "[red]CORRUPTED[/red]"

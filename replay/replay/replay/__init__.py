@@ -8,7 +8,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Union
 import json
+import logging
 from deepdiff import DeepDiff
+
+logger = logging.getLogger(__name__)
 
 
 # Pipeline stages in order
@@ -87,8 +90,8 @@ def load_session(capture_dir: Path, session_name: str) -> list[SnapshotData]:
                 streaming=data.get("streaming", False),
                 chat_context=data.get("chat_context"),
             ))
-        except (json.JSONDecodeError, OSError):
-            continue
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Failed to load snapshot {json_file.name}: {e}")
     
     return sorted(snapshots, key=lambda s: s.timestamp)
 
