@@ -103,7 +103,7 @@ class BugReporter:
         try:
             resp = httpx.post(
                 "https://api.linear.app/graphql",
-                headers={"Authorization": self._api_key, "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
                 json={"query": """
                     mutation CreateIssue($input: IssueCreateInput!) {
                         issueCreate(input: $input) { issue { id url } }
