@@ -1,0 +1,185 @@
+# 20 fitness identity personas
+# Each defines WHO the user is — their goals, device, and knowledge level.
+# These compose with behaviour_profiles.yaml to produce 160 distinct driver sessions.
+
+identities:
+  - id: complete-beginner
+    name: "Complete Beginner"
+    primary_device: iphone
+    goals: ["lose weight", "build basic fitness"]
+    tech_savvy: none
+    workout_types: ["bodyweight", "machines"]
+    typical_hr: 140
+    description: "Never worked out before. Doesn't understand fitness terminology. Likely to misread instructions."
+
+  - id: casual-gym-goer
+    name: "Casual Gym-Goer"
+    primary_device: iphone_apple_watch
+    goals: ["consistency", "feel better"]
+    tech_savvy: low
+    workout_types: ["strength", "cardio"]
+    typical_hr: 135
+    description: "Goes to the gym 2x/week. Follows basic programs. Knows the fundamentals but not advanced features."
+
+  - id: serious-powerlifter
+    name: "Serious Powerlifter"
+    primary_device: android_garmin
+    goals: ["PRs", "periodisation", "strength numbers"]
+    tech_savvy: high
+    workout_types: ["powerlifting", "strength"]
+    typical_hr: 120
+    description: "Tracks every set/rep. Cares deeply about data accuracy. Will notice if numbers are wrong."
+
+  - id: marathon-runner
+    name: "Marathon Runner"
+    primary_device: garmin
+    goals: ["zone 2 training", "weekly mileage", "race time"]
+    tech_savvy: high
+    workout_types: ["running", "cardio"]
+    typical_hr: 145
+    description: "Primarily uses Garmin. Expects seamless sync. Focused on pace, HR zones, and distance."
+
+  - id: hyrox-competitor
+    name: "HYROX Competitor"
+    primary_device: garmin_apple_watch
+    goals: ["race prep", "functional fitness", "benchmark times"]
+    tech_savvy: high
+    workout_types: ["functional", "strength", "cardio"]
+    typical_hr: 155
+    description: "High-intensity training. Mixes strength and cardio. Expects the app to handle hybrid workouts."
+
+  - id: triathlete
+    name: "Triathlete"
+    primary_device: garmin
+    goals: ["multi-sport logging", "transition tracking"]
+    tech_savvy: expert
+    workout_types: ["swimming", "cycling", "running"]
+    typical_hr: 150
+    description: "Logs swim/bike/run. Expects multi-sport session support. Very data-focused."
+
+  - id: cyclist
+    name: "Cyclist"
+    primary_device: garmin_android
+    goals: ["FTP improvement", "watts/kg", "distance"]
+    tech_savvy: expert
+    workout_types: ["cycling"]
+    typical_hr: 148
+    description: "Power-meter user. Expects watts, cadence, FTP calculations. Will test edge cases in metrics."
+
+  - id: crossfitter
+    name: "CrossFitter"
+    primary_device: iphone
+    goals: ["WOD completion", "benchmark times", "gymnastics skills"]
+    tech_savvy: medium
+    workout_types: ["crossfit", "functional", "strength"]
+    typical_hr: 160
+    description: "Follows WOD format. Expects AMRAP/EMOM/For Time workout types. Fast-paced interactions."
+
+  - id: bodybuilder
+    name: "Bodybuilder"
+    primary_device: android
+    goals: ["hypertrophy", "macro tracking", "muscle isolation"]
+    tech_savvy: medium
+    workout_types: ["bodybuilding", "strength"]
+    typical_hr: 125
+    description: "High volume training. Tracks every muscle group. Cares about exercise taxonomy."
+
+  - id: yoga-mobility
+    name: "Yoga / Mobility Focused"
+    primary_device: iphone
+    goals: ["flexibility", "recovery", "HRV improvement", "stress reduction"]
+    tech_savvy: low
+    workout_types: ["yoga", "mobility", "stretching"]
+    typical_hr: 95
+    description: "Minimal tech interest. Uses app mostly for logging and recovery insights."
+
+  - id: elderly-user
+    name: "Elderly User (65+)"
+    primary_device: iphone_large_text
+    goals: ["health maintenance", "step counting", "doctor recommendations"]
+    tech_savvy: very_low
+    workout_types: ["walking", "light-resistance"]
+    typical_hr: 110
+    accessibility: ["large_text", "reduce_motion"]
+    description: "Very low tech literacy. Easily confused by UI. Likely to misread buttons. Critical for accessibility testing."
+
+  - id: rehab-recovery
+    name: "Rehab / Injury Recovery"
+    primary_device: iphone
+    goals: ["physio exercises", "pain-free movement", "gradual progression"]
+    tech_savvy: low
+    workout_types: ["rehab", "bodyweight", "stretching"]
+    typical_hr: 100
+    description: "Follows specific physio program. Very cautious about overloading. Tests low-weight/low-rep inputs."
+
+  - id: personal-trainer
+    name: "Personal Trainer"
+    primary_device: web_iphone
+    goals: ["client management", "program creation", "progress tracking"]
+    tech_savvy: expert
+    workout_types: ["all"]
+    typical_hr: 130
+    description: "Power user. Creates programs for clients. Will explore every feature. Most likely to hit edge cases."
+
+  - id: group-fitness-coach
+    name: "Group Fitness Coach"
+    primary_device: ipad_web
+    goals: ["class planning", "participant tracking", "timer management"]
+    tech_savvy: medium
+    workout_types: ["group-fitness", "hiit", "circuits"]
+    typical_hr: 145
+    description: "Needs the app to work during live classes. Low tolerance for latency or bugs."
+
+  - id: weight-loss-journey
+    name: "Weight Loss Journey"
+    primary_device: android
+    goals: ["calorie tracking", "progress photos", "consistent logging"]
+    tech_savvy: low
+    workout_types: ["cardio", "light-strength"]
+    typical_hr: 138
+    description: "Motivated but easily discouraged. Will abandon app if frustrated. High churn risk."
+
+  - id: teen-athlete
+    name: "Teen Athlete"
+    primary_device: iphone
+    goals: ["sport performance", "speed", "agility"]
+    tech_savvy: low
+    workout_types: ["sport-specific", "strength", "plyometrics"]
+    typical_hr: 155
+    description: "Fast interactions. Minimal patience. Will try to break things out of curiosity."
+
+  - id: nutrition-obsessed
+    name: "Nutrition-Obsessed User"
+    primary_device: web
+    goals: ["macro tracking", "meal logging", "body composition"]
+    tech_savvy: high
+    workout_types: ["strength", "cardio"]
+    typical_hr: 128
+    description: "Highly analytical. Will test edge cases in nutrition data. Expects precise numbers."
+
+  - id: data-hoarder
+    name: "Data Hoarder"
+    primary_device: garmin_all
+    goals: ["export everything", "complete history", "data portability"]
+    tech_savvy: expert
+    workout_types: ["all"]
+    typical_hr: 135
+    description: "Connects every device. Tries to export all data. Tests API limits and data integrity."
+
+  - id: wearable-skeptic
+    name: "Wearable Skeptic"
+    primary_device: web_only
+    goals: ["manual logging", "simple tracking", "no device dependency"]
+    tech_savvy: low
+    workout_types: ["strength", "cardio"]
+    typical_hr: null
+    description: "No wearable device. Tests the manual-only path through the app. Many users are in this category."
+
+  - id: privacy-paranoid
+    name: "Privacy Paranoid User"
+    primary_device: iphone
+    goals: ["fitness tracking with minimal data sharing"]
+    tech_savvy: medium
+    workout_types: ["strength", "cardio"]
+    typical_hr: 130
+    description: "Denies all optional permissions. Tests the app's behaviour when data access is restricted."
