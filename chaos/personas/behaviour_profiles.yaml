@@ -1,0 +1,108 @@
+# 8 behaviour profiles
+# Each defines HOW the user interacts — their patience, error rate, and chaos factor.
+# Compose with fitness_identities.yaml: 20 × 8 = 160 distinct personas.
+
+profiles:
+  - id: rage-tapper
+    name: "Rage Tapper"
+    patience: 0.1          # gives up after ~3s of no response
+    error_rate: 0.4        # 40% chance of mistyping or tapping wrong element
+    chaos_factor: 0.6      # 60% chance of doing something unexpected when frustrated
+    abandonment_rate: 0.5  # 50% chance of quitting a flow mid-way
+    habits:
+      - rapid_multi_tap    # taps same button 3-5 times rapidly
+      - force_close        # closes and reopens when frustrated
+      - back_button_spam   # hammers back button
+    description: "Frustrated user. Doesn't wait. Taps everything multiple times."
+
+  - id: completionist
+    name: "Completionist"
+    patience: 0.95
+    error_rate: 0.05
+    chaos_factor: 0.1
+    abandonment_rate: 0.02
+    habits:
+      - reads_all_text
+      - fills_all_optional_fields
+      - explores_every_menu
+      - checks_settings
+    description: "Methodical user. Reads everything. Fills every field. Explores all menus. Best for coverage."
+
+  - id: skipper
+    name: "Skipper"
+    patience: 0.7
+    error_rate: 0.15
+    chaos_factor: 0.3
+    abandonment_rate: 0.2
+    habits:
+      - skips_onboarding
+      - dismisses_all_modals
+      - reads_nothing
+      - jumps_to_core_feature
+    description: "Skips everything. Never reads tooltips or onboarding. Goes straight to core actions."
+
+  - id: explorer
+    name: "Explorer"
+    patience: 0.85
+    error_rate: 0.2
+    chaos_factor: 0.8
+    abandonment_rate: 0.15
+    habits:
+      - taps_every_visible_element
+      - tries_unexpected_inputs
+      - navigates_non_linearly
+      - opens_all_dropdowns
+    description: "Curiosity-driven. Taps anything tappable. Finds unexpected UI states nobody thought to test."
+
+  - id: abandoner
+    name: "Abandoner"
+    patience: 0.6
+    error_rate: 0.2
+    chaos_factor: 0.4
+    abandonment_rate: 0.7  # 70% chance of quitting mid-flow
+    habits:
+      - quits_mid_form
+      - returns_via_back_button
+      - reopens_after_abandoning
+    description: "High abandonment. Creates partial state everywhere. Critical for testing draft/recovery flows."
+
+  - id: accessibility-user
+    name: "Accessibility User"
+    patience: 0.8
+    error_rate: 0.1
+    chaos_factor: 0.1
+    abandonment_rate: 0.1
+    accessibility_settings:
+      large_text: true
+      reduce_motion: true
+      high_contrast: false
+    habits:
+      - uses_tab_navigation
+      - relies_on_labels
+    description: "Uses accessibility features. Tests that the app works with large text and reduced motion."
+
+  - id: bad-network
+    name: "Bad Network User"
+    patience: 0.5
+    error_rate: 0.15
+    chaos_factor: 0.3
+    abandonment_rate: 0.4
+    network_throttle: "3G"   # applies via browser devtools
+    habits:
+      - retries_on_timeout
+      - refreshes_page
+      - abandons_on_slow_load
+    description: "Poor connectivity. Triggers timeout and retry paths. High abandonment when loads are slow."
+
+  - id: multi-tasker
+    name: "Multi-Tasker"
+    patience: 0.7
+    error_rate: 0.25
+    chaos_factor: 0.5
+    abandonment_rate: 0.3
+    background_frequency: 0.3   # backgrounds/switches away every ~3 actions
+    habits:
+      - switches_tabs_mid_flow
+      - returns_to_different_state
+      - opens_multiple_tabs
+    description: "Never focuses on one thing. Switches away and returns mid-flow. Destroys session state."
