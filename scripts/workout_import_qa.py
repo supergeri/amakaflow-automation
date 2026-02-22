@@ -187,7 +187,7 @@ def set_has_issues_output(results: list[dict[str, Any]], output_path: str = "GIT
 
 # ============== SIDE-EFFECT FUNCTIONS ==============
 
-async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, Any]:
+async def import_url_and_screenshot(page, url: str, timeout: int = 120, base_url: str = "http://localhost:3000") -> dict[str, Any]:
     """
     Import a workout URL via the AmakaFlow UI using Playwright.
     
@@ -195,6 +195,7 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         page: Playwright page object
         url: Workout URL to import
         timeout: Timeout in seconds
+        base_url: Base URL of the application
         
     Returns:
         Dictionary with import status and details
@@ -208,29 +209,19 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         return result
     
     try:
-        # Navigate to the app and clear localStorage to prevent stale workflow state
-        # from a previous run from redirecting to a mid-workflow page
-        await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
-        await page.evaluate("() => localStorage.clear()")
-        await page.reload(wait_until="networkidle")
+        # Navigate to the Create Workout flow
+        await page.goto(f"{base_url}/workouts/create", wait_until="networkidle", timeout=30000)
 
-        # Navigate to the Import URL view (the app uses view state, not URL routing)
-        import_nav_btn = page.get_by_role("button", name="Import URL")
-        await import_nav_btn.wait_for(state="visible", timeout=10000)
-        await import_nav_btn.click()
-
-        # Wait for the URL input field to be visible
+        # Step 1: Add Sources — fill in the Instagram URL
         url_input = page.locator('[data-testid="import-url-input"]')
-        await url_input.wait_for(state="visible", timeout=10000)
-        
-        # Enter the URL
+        await url_input.wait_for(state="visible", timeout=15000)
         await url_input.fill(url)
-        
-        # Click the import button
+
+        # Submit
         submit_button = page.locator('[data-testid="import-url-submit"]')
         await submit_button.click()
-        
-        # Wait for streaming to complete (button text changes from "Importing..." to "Import")
+
+        # Wait for ingestion to finish (button goes from "Importing..." back to "Import")
         max_wait = timeout * 1000  # Convert to milliseconds
         start_time = asyncio.get_event_loop().time()
         
@@ -243,6 +234,15 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
                 result["issues"].append("Timeout waiting for import to complete")
                 break
             await asyncio.sleep(1)
+        
+        # The app auto-advances to Step 2 "Structure Workout" — wait for it to render
+        # Try the specific selector first, fall back to URL check
+        try:
+            await page.wait_for_selector('[data-testid="structure-workout-view"]', timeout=15000)
+        except PlaywrightTimeoutError:
+            # Fallback: wait for URL and network idle
+            await page.wait_for_url("**/workouts/create**", timeout=15000)
+            await page.wait_for_load_state("networkidle")
         
         # Wait a bit for any animations/renders
         await asyncio.sleep(2)
@@ -433,7 +433,7 @@ def send_telegram_report(report: str, screenshot_paths: list[str], issues_found:
 
 # ============== MAIN ORCHESTRATION ==============
 
-async def run_qa(urls: list[str], headed: bool = False, timeout: int = 120) -> list[dict[str, Any]]:
+async def run_qa(urls: list[str], headed: bool = False, timeout: int = 120, base_url: str = "http://localhost:3000") -> list[dict[str, Any]]:
     """
     Run the full QA workflow.
     
@@ -459,7 +459,7 @@ async def run_qa(urls: list[str], headed: bool = False, timeout: int = 120) -> l
             print(f"Testing URL: {url}")
             
             # Import the URL
-            result = await import_workflow_url(page, url, timeout)
+            result = await import_url_and_screenshot(page, url, timeout, base_url)
             
             # Analyze screenshot with Kimi if we have one
             if result.get("screenshot_path"):
@@ -482,6 +482,7 @@ def main():
     parser.add_argument("--headed", action="store_true", help="Run browser in headed mode")
     parser.add_argument("--timeout", type=int, default=120, help="Timeout per URL in seconds")
     parser.add_argument("--output", default="artifacts/workout-qa-report.md", help="Output report path")
+    parser.add_argument("--base-url", default="http://localhost:3000", help="Base URL of the application")
     
     args = parser.parse_args()
     
@@ -492,7 +493,7 @@ def main():
     urls = [item["url"] for item in urls_data]
     
     # Run QA
-    results = asyncio.run(run_qa(urls, args.headed, args.timeout))
+    results = asyncio.run(run_qa(urls, args.headed, args.timeout, args.base_url))
     
     # Build report
     report = build_report(results)
