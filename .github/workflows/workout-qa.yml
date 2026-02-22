@@ -1,0 +1,132 @@
+name: Workout Import QA
+
+on:
+  schedule:
+    # Nightly at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      manual_run:
+        description: "Manual QA run"
+        required: false
+        default: "true"
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      has_issues: ${{ steps.qa.outputs.has_issues }}
+
+    steps:
+      - name: Checkout amakaflow-automation
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/amakaflow-automation
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-automation
+
+      - name: Checkout amakaflow-dev-workspace
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/amakaflow-dev-workspace
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-dev-workspace
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r amakaflow-automation/requirements-qa.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+          playwright install-deps
+
+      - name: Write .env file
+        working-directory: amakaflow-dev-workspace
+        run: |
+          cat > .env << 'EOF'
+          VITE_CLERK_PUBLISHABLE_KEY=placeholder
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          APIFY_API_TOKEN=${{ secrets.APIFY_API_TOKEN }}
+          KIMI_API_KEY=${{ secrets.KIMI_API_KEY }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          EOF
+
+      - name: Start services
+        working-directory: amakaflow-dev-workspace
+        run: docker compose up -d
+
+      - name: Wait for services
+        working-directory: amakaflow-automation
+        run: ./scripts/wait-for-services.sh http://localhost:3000 http://localhost:8004/health 120
+
+      - name: Run QA
+        id: qa
+        working-directory: amakaflow-automation
+        continue-on-error: true
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          GITHUB_OUTPUT: ${{ github.outputs }}
+        run: |
+          python3 scripts/workout_import_qa.py \
+            --urls fixtures/workout-qa-urls.json \
+            --timeout 120
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workout-qa-artifacts
+          path: amakaflow-automation/artifacts/
+          retention-days: 7
+
+      - name: Send Telegram notification on issues
+        if: steps.qa.outputs.has_issues == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # Read the report
+          REPORT=$(cat amakaflow-automation/artifacts/workout-qa-report.md)
+          
+          # Send report text
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "text=${REPORT}" \
+            -d "parse_mode=markdown"
+          
+          # Send each screenshot
+          for screenshot in amakaflow-automation/artifacts/screenshots/*.png; do
+            if [ -f "$screenshot" ]; then
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
+                -d "chat_id=${TELEGRAM_CHAT_ID}" \
+                -F "photo=@${screenshot}"
+            fi
+          done
+
+# GitHub Secrets needed (add these in repo settings):
+# - KIMI_API_KEY: Kimi vision API key
+# - TELEGRAM_BOT_TOKEN: Telegram Bot API token
+# - TELEGRAM_CHAT_ID: Telegram chat ID for notifications
+# - GH_PAT: GitHub Personal Access Token (repo scope)
+# - SUPABASE_URL: Supabase project URL
+# - SUPABASE_ANON_KEY: Supabase anon key
+# - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
+# - OPENAI_API_KEY: OpenAI API key
+# - ANTHROPIC_API_KEY: Anthropic API key
+# - APIFY_API_TOKEN: Apify API token
