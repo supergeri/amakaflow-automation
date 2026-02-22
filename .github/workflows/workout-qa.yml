@@ -25,14 +25,12 @@ on:
 #   OPENAI_API_KEY            - OpenAI key (for app services)
 #   ANTHROPIC_API_KEY         - Anthropic key (for app services)
 #   APIFY_API_TOKEN           - Apify token (for workout ingestion)
-#
-# Required secrets (need to be added to repo):
-#   CLERK_PUBLISHABLE_KEY    - Clerk publishable key (pk_test_...)
-#   CLERK_SECRET_KEY         - Clerk secret key (sk_test_...)
-#   CLERK_DOMAIN             - Clerk domain (xxx.clerk.accounts.dev)
-#   DATABASE_URL            - Direct Postgres connection string for calendar-api
-#   INTERNAL_API_KEY         - Internal service-to-service auth key
-#   YT_TRANSCRIPT_API_TOKEN  - YouTube transcript API token (optional, can be blank)
+#   CLERK_PUBLISHABLE_KEY     - Clerk publishable key (pk_test_...)
+#   CLERK_SECRET_KEY          - Clerk secret key (sk_test_...)
+#   CLERK_DOMAIN              - Clerk domain (xxx.clerk.accounts.dev)
+#   DATABASE_URL              - Direct Postgres connection string for calendar-api
+#   INTERNAL_API_KEY          - Internal service-to-service auth key
+#   YT_TRANSCRIPT_API_TOKEN   - YouTube transcript API token (optional, can be blank)
 
 jobs:
   qa:
@@ -119,10 +117,19 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Playwright system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+            libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+            libxshmfence1 libpango-1.0-0 libcairo2 libasound2t64
+
       - name: Install Python dependencies
         run: |
           pip install -r requirements-qa.txt
-          playwright install chromium --with-deps
+          playwright install chromium
 
       - name: Run unit tests
         run: python3 -m pytest scripts/test_workout_import_qa.py -v
