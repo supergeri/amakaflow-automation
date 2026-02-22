@@ -25,6 +25,14 @@ on:
 #   OPENAI_API_KEY            - OpenAI key (for app services)
 #   ANTHROPIC_API_KEY         - Anthropic key (for app services)
 #   APIFY_API_TOKEN           - Apify token (for workout ingestion)
+#
+# Required secrets (need to be added to repo):
+#   CLERK_PUBLISHABLE_KEY    - Clerk publishable key (pk_test_...)
+#   CLERK_SECRET_KEY         - Clerk secret key (sk_test_...)
+#   CLERK_DOMAIN             - Clerk domain (xxx.clerk.accounts.dev)
+#   DATABASE_URL            - Direct Postgres connection string for calendar-api
+#   INTERNAL_API_KEY         - Internal service-to-service auth key
+#   YT_TRANSCRIPT_API_TOKEN  - YouTube transcript API token (optional, can be blank)
 
 jobs:
   qa:
@@ -42,16 +50,60 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           path: amakaflow-dev-workspace
 
+      - name: Checkout amakaflow-ui
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/amakaflow-ui
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-dev-workspace/amakaflow-ui
+
+      - name: Checkout chat-api
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/chat-api
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-dev-workspace/chat-api
+
+      - name: Checkout mapper-api
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/mapper-api
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-dev-workspace/mapper-api
+
+      - name: Checkout calendar-api
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/calendar-api
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-dev-workspace/calendar-api
+
+      - name: Checkout workout-ingestor-api
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/workout-ingestor-api
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-dev-workspace/workout-ingestor-api
+
       - name: Write .env for dev stack
         run: |
-          cat > amakaflow-dev-workspace/.env <<'EOF'
-          VITE_CLERK_PUBLISHABLE_KEY=placeholder
+          cat > amakaflow-dev-workspace/.env << EOF
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_DOMAIN=${{ secrets.CLERK_DOMAIN }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           APIFY_API_TOKEN=${{ secrets.APIFY_API_TOKEN }}
+          INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
+          YT_TRANSCRIPT_API_TOKEN=${{ secrets.YT_TRANSCRIPT_API_TOKEN }}
+          HELICONE_ENABLED=false
+          TTS_ENABLED=false
+          ALLOWED_ORIGINS=http://localhost:3000
+          ENVIRONMENT=development
           EOF
 
       - name: Start dev stack
