@@ -208,19 +208,24 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         return result
     
     try:
-        # Navigate to the Create Workout flow
-        await page.goto("http://localhost:3000/workouts/create", wait_until="networkidle", timeout=30000)
+        # The app is a SPA with no URL routing — everything lives at /
+        await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
 
-        # Step 1: Add Sources — fill in the Instagram URL
+        # Click the "Import URL" button in the top nav to reveal the ImportWorkout component
+        import_nav_btn = page.get_by_role("button", name="Import URL")
+        await import_nav_btn.wait_for(state="visible", timeout=15000)
+        await import_nav_btn.click()
+
+        # Wait for the import input to appear
         url_input = page.locator('[data-testid="import-url-input"]')
-        await url_input.wait_for(state="visible", timeout=15000)
+        await url_input.wait_for(state="visible", timeout=10000)
         await url_input.fill(url)
-        
+
         # Submit
         submit_button = page.locator('[data-testid="import-url-submit"]')
         await submit_button.click()
-        
-        # Wait for ingestion to finish (button goes from "Importing..." back to "Import")
+
+        # Wait for ingestion to finish — button text goes "Importing..." → "Import"
         await page.wait_for_function(
             """() => {
                 const btn = document.querySelector('[data-testid="import-url-submit"]');
@@ -229,24 +234,17 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
             timeout=timeout * 1000
         )
 
-        # The app auto-advances to Step 2 "Structure Workout" — wait for it to render
-        # Try structure-workout-view first, fallback to URL check
-        try:
-            await page.wait_for_selector('[data-testid="structure-workout-view"]', timeout=15000)
-        except PlaywrightTimeoutError:
-            await page.wait_for_url("**/workouts/create**", timeout=15000)
-            await page.wait_for_load_state("networkidle")
-        
-        await asyncio.sleep(2)  # settle animations
-        
-        # Screenshot the structured result (Step 2)
+        # Wait for the result to fully render
+        await page.wait_for_load_state("networkidle")
+        await asyncio.sleep(2)
+
+        # Screenshot the structured workout result
         screenshot_dir = Path("artifacts/screenshots")
         screenshot_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Create a safe filename from URL
+
         safe_name = re.sub(r'[^\w\-_]', '_', url.split('/')[-2] if url.split('/')[-2] else url.split('/')[-1])
         screenshot_path = screenshot_dir / f"{safe_name}.png"
-        
+
         await page.screenshot(path=str(screenshot_path), full_page=True)
         
         result["screenshot_path"] = str(screenshot_path)
