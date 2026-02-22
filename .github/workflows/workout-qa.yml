@@ -90,7 +90,7 @@ jobs:
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
-          CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          CLERK_PUBLISHABLE_KEY=pk_placeholder
           CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
           CLERK_DOMAIN=${{ secrets.CLERK_DOMAIN }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
