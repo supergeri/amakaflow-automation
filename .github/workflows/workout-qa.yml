@@ -141,6 +141,7 @@ jobs:
         continue-on-error: true
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          MOONSHOT_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: |
           python3 scripts/workout_import_qa.py \
             --urls fixtures/workout-qa-urls.json \
