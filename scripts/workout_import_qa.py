@@ -208,46 +208,38 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         return result
     
     try:
-        # Navigate to the app and clear localStorage to prevent stale workflow state
-        # from a previous run from redirecting to a mid-workflow page
-        await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
-        await page.evaluate("() => localStorage.clear()")
-        await page.reload(wait_until="networkidle")
+        # Navigate to the Create Workout flow
+        await page.goto("http://localhost:3000/workouts/create", wait_until="networkidle", timeout=30000)
 
-        # Navigate to the Import URL view (the app uses view state, not URL routing)
-        import_nav_btn = page.get_by_role("button", name="Import URL")
-        await import_nav_btn.wait_for(state="visible", timeout=10000)
-        await import_nav_btn.click()
-
-        # Wait for the URL input field to be visible
+        # Step 1: Add Sources — fill in the Instagram URL
         url_input = page.locator('[data-testid="import-url-input"]')
-        await url_input.wait_for(state="visible", timeout=10000)
-        
-        # Enter the URL
+        await url_input.wait_for(state="visible", timeout=15000)
         await url_input.fill(url)
         
-        # Click the import button
+        # Submit
         submit_button = page.locator('[data-testid="import-url-submit"]')
         await submit_button.click()
         
-        # Wait for streaming to complete (button text changes from "Importing..." to "Import")
-        max_wait = timeout * 1000  # Convert to milliseconds
-        start_time = asyncio.get_event_loop().time()
+        # Wait for ingestion to finish (button goes from "Importing..." back to "Import")
+        await page.wait_for_function(
+            """() => {
+                const btn = document.querySelector('[data-testid="import-url-submit"]');
+                return btn && btn.textContent.includes('Import') && !btn.textContent.includes('Importing');
+            }""",
+            timeout=timeout * 1000
+        )
+
+        # The app auto-advances to Step 2 "Structure Workout" — wait for it to render
+        # Try structure-workout-view first, fallback to URL check
+        try:
+            await page.wait_for_selector('[data-testid="structure-workout-view"]', timeout=15000)
+        except PlaywrightTimeoutError:
+            await page.wait_for_url("**/workouts/create**", timeout=15000)
+            await page.wait_for_load_state("networkidle")
         
-        while True:
-            button_text = await submit_button.text_content()
-            if button_text and "Import" in button_text and "Importing" not in button_text:
-                break
-            if (asyncio.get_event_loop().time() - start_time) * 1000 > max_wait:
-                result["status"] = "error"
-                result["issues"].append("Timeout waiting for import to complete")
-                break
-            await asyncio.sleep(1)
+        await asyncio.sleep(2)  # settle animations
         
-        # Wait a bit for any animations/renders
-        await asyncio.sleep(2)
-        
-        # Take screenshot
+        # Screenshot the structured result (Step 2)
         screenshot_dir = Path("artifacts/screenshots")
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         
