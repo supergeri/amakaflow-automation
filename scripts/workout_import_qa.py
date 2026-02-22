@@ -218,8 +218,8 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         # Navigate to root — SPA, no URL routing
         await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
 
-        # Open the Import dropdown in the top nav
-        import_dropdown = page.get_by_role("button", name="Import")
+        # Open the Import dropdown in the top nav (exact=True avoids matching "Import URL" button)
+        import_dropdown = page.get_by_role("button", name="Import", exact=True)
         await import_dropdown.wait_for(state="visible", timeout=15000)
         await import_dropdown.click()
 
