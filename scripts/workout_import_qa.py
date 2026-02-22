@@ -227,8 +227,9 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         await page.get_by_role("menuitem", name="Single Import").click()
 
         # Wait for the AddSources view — fill the Video URL input
+        # Use 30s timeout for CI environments which may be slower than local
         url_input = page.get_by_placeholder("Paste YouTube, TikTok, Instagram, or Pinterest URL...")
-        await url_input.wait_for(state="visible", timeout=10000)
+        await url_input.wait_for(state="visible", timeout=30000)
         await url_input.fill(url)
 
         # Press Enter to add the URL to the sources list
@@ -236,7 +237,7 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
 
         # Wait for the source to be added — Generate Structure button becomes enabled
         generate_btn = page.get_by_role("button", name="Generate Structure")
-        await generate_btn.wait_for(state="visible", timeout=5000)
+        await generate_btn.wait_for(state="visible", timeout=15000)
         await page.wait_for_function(
             """() => {
                 const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim().includes('Generate Structure'));
