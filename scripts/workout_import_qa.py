@@ -210,7 +210,12 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
     try:
         # Navigate to the app
         await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
-        
+
+        # Navigate to the Import URL view (the app uses view state, not URL routing)
+        import_nav_btn = page.get_by_role("button", name="Import URL")
+        await import_nav_btn.wait_for(state="visible", timeout=10000)
+        await import_nav_btn.click()
+
         # Wait for the URL input field to be visible
         url_input = page.locator('[data-testid="import-url-input"]')
         await url_input.wait_for(state="visible", timeout=10000)
@@ -512,4 +517,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
