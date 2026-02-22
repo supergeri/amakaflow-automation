@@ -164,7 +164,6 @@ jobs:
           REPORT=$(cat artifacts/workout-qa-report.md 2>/dev/null || echo "QA run completed but no report found")
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d parse_mode="Markdown" \
             --data-urlencode text="${REPORT}"
 
           # Send each screenshot
