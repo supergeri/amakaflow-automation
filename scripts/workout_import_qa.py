@@ -208,28 +208,43 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         return result
     
     try:
-        # The app is a SPA with no URL routing — everything lives at /
+        # Navigate to root — SPA, no URL routing
         await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
 
-        # Click the "Import URL" button in the top nav to reveal the ImportWorkout component
-        import_nav_btn = page.get_by_role("button", name="Import URL")
-        await import_nav_btn.wait_for(state="visible", timeout=15000)
-        await import_nav_btn.click()
+        # Open the Import dropdown in the top nav
+        import_dropdown = page.get_by_role("button", name="Import")
+        await import_dropdown.wait_for(state="visible", timeout=15000)
+        await import_dropdown.click()
 
-        # Wait for the import input to appear
-        url_input = page.locator('[data-testid="import-url-input"]')
+        # Click "Single Import" from the dropdown
+        await page.get_by_role("menuitem", name="Single Import").click()
+
+        # Wait for the AddSources view — fill the Video URL input
+        url_input = page.get_by_placeholder("Paste YouTube, TikTok, Instagram, or Pinterest URL...")
         await url_input.wait_for(state="visible", timeout=10000)
         await url_input.fill(url)
 
-        # Submit
-        submit_button = page.locator('[data-testid="import-url-submit"]')
-        await submit_button.click()
+        # Press Enter to add the URL to the sources list
+        await url_input.press("Enter")
 
-        # Wait for ingestion to finish — button text goes "Importing..." → "Import"
+        # Wait for the source to be added — Generate Structure button becomes enabled
+        generate_btn = page.get_by_role("button", name="Generate Structure")
+        await generate_btn.wait_for(state="visible", timeout=5000)
         await page.wait_for_function(
             """() => {
-                const btn = document.querySelector('[data-testid="import-url-submit"]');
-                return btn && btn.textContent.includes('Import') && !btn.textContent.includes('Importing');
+                const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim().includes('Generate Structure'));
+                return btn && !btn.disabled;
+            }""",
+            timeout=10000
+        )
+        await generate_btn.click()
+
+        # Wait for generation to finish — "Generating Structure..." text disappears
+        await page.wait_for_function(
+            """() => {
+                const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Generate Structure') || b.textContent.includes('Generating'));
+                // Generation done when no button with Generating text, or button is re-enabled
+                return !btn || !btn.textContent.includes('Generating');
             }""",
             timeout=timeout * 1000
         )
@@ -290,7 +305,7 @@ async def analyze_screenshot_with_kimi(screenshot_path: str) -> dict[str, Any]:
     
     client = OpenAI(
         api_key=api_key,
-        base_url="https://api.moonshot.cn/v1"
+        base_url="https://api.moonshot.ai/v1"
     )
     
     try:
@@ -316,7 +331,7 @@ async def _call_kimi_api(client: OpenAI, image_data: bytes) -> dict[str, Any]:
         Analysis result from Kimi
     """
     response = client.chat.completions.create(
-        model="moonshot-v1-vision-preview",
+        model="moonshot-v1-8k-vision-preview",
         messages=[
             {
                 "role": "user",
@@ -328,7 +343,7 @@ async def _call_kimi_api(client: OpenAI, image_data: bytes) -> dict[str, Any]:
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/png;base64,{image_data.hex()}"
+                            "url": f"data:image/png;base64,{__import__('base64').b64encode(image_data).decode()}"
                         }
                     }
                 ]
