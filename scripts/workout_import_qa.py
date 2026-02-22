@@ -86,9 +86,16 @@ def parse_kimi_response(response_text: str) -> dict[str, Any]:
         Dictionary with 'status' (ok/issues/error) and 'issues' list
     """
     response_lower = response_text.lower()
-    
-    # Check for explicit error indicators
-    if "error" in response_lower or "failed" in response_lower:
+
+    # Check for positive "OK" response before looking for error keywords
+    ok_phrases = ["everything looks correct", "looks correct", "no issues", "no errors",
+                  "no problems", "nothing wrong", "looks good", "appears correct",
+                  "^ok$", "all ok", "looks fine"]
+    if any(phrase in response_lower for phrase in ok_phrases):
+        return {"status": "ok", "issues": []}
+
+    # Check for API/system-level error (not UI errors reported by Kimi)
+    if response_lower.startswith("error") or "api error" in response_lower:
         return {"status": "error", "issues": [response_text]}
     
     # Check for issues indicators
@@ -301,7 +308,8 @@ async def analyze_screenshot_with_kimi(screenshot_path: str) -> dict[str, Any]:
     
     api_key = os.environ.get("MOONSHOT_API_KEY")
     if not api_key:
-        return {"status": "error", "issues": ["MOONSHOT_API_KEY not set"]}
+        # No vision API available — skip analysis, don't override import result
+        return {"status": "skipped", "issues": []}
     
     client = OpenAI(
         api_key=api_key,
@@ -470,7 +478,10 @@ async def run_qa(urls: list[str], headed: bool = False, timeout: int = 120) -> l
             if result.get("screenshot_path"):
                 print(f"  Analyzing screenshot with Kimi...")
                 analysis = await analyze_screenshot_with_kimi(result["screenshot_path"])
-                result["status"] = analysis.get("status", result["status"])
+                kimi_status = analysis.get("status")
+                # Only update status when Kimi returned a real result (not skipped/error from missing key)
+                if kimi_status and kimi_status not in ("skipped",):
+                    result["status"] = kimi_status
                 result["issues"].extend(analysis.get("issues", []))
             
             print(f"  Status: {result['status']}")
