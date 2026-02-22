@@ -208,8 +208,11 @@ async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, A
         return result
     
     try:
-        # Navigate to the app
+        # Navigate to the app and clear localStorage to prevent stale workflow state
+        # from a previous run from redirecting to a mid-workflow page
         await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
+        await page.evaluate("() => localStorage.clear()")
+        await page.reload(wait_until="networkidle")
 
         # Navigate to the Import URL view (the app uses view state, not URL routing)
         import_nav_btn = page.get_by_role("button", name="Import URL")
