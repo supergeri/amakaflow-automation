@@ -176,11 +176,11 @@ def set_has_issues_output(results: list[dict[str, Any]], output_path: str = "GIT
         output_path: Path to GitHub output file
     """
     has_issues = any(r.get("status") != "ok" for r in results)
-    
-    # Check if running in GitHub Actions environment
-    if os.environ.get("GITHUB_OUTPUT"):
-        output_path = os.environ.get("GITHUB_OUTPUT")
-    
+
+    # Only use GITHUB_OUTPUT env var when called with the default sentinel value
+    if output_path == "GITHUB_OUTPUT":
+        output_path = os.environ.get("GITHUB_OUTPUT", "GITHUB_OUTPUT")
+
     with open(output_path, "a") as f:
         f.write(f"has_issues={str(has_issues).lower()}\n")
 
@@ -512,3 +512,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
