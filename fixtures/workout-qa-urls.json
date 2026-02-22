@@ -1,22 +1,27 @@
 [
   {
-    "url": "https://www.instagram.com/reel/CjM8x4ypE3Z/",
-    "description": "HIIT workout video"
+    "url": "https://www.instagram.com/reels/DRKgJ7lDgq4/",
+    "platform": "instagram",
+    "description": "upper body strength workout"
   },
   {
-    "url": "https://www.instagram.com/reel/Ck3nT8yD8hM/",
-    "description": "Yoga flow session"
+    "url": "https://www.instagram.com/p/DOoeEyOiBCT/",
+    "platform": "instagram",
+    "description": "leg strength workout"
   },
   {
-    "url": "https://www.instagram.com/reel/Cl5Qw9zF9pR/",
-    "description": "Strength training routine"
+    "url": "https://www.instagram.com/p/DSjrK2sCLpa/",
+    "platform": "instagram",
+    "description": "hyrox pyramid workout"
   },
   {
-    "url": "https://www.instagram.com/reel/Cm7Ry3kH2qT/",
-    "description": "Cardio workout"
+    "url": "https://www.instagram.com/p/DOZIYG_ACuO/",
+    "platform": "instagram",
+    "description": "hyrox emom workout — should show emom structure, not circuit"
   },
   {
-    "url": "https://www.instagram.com/reel/Cn9Ut5kL4sV/",
-    "description": "Core workout"
+    "url": "https://www.instagram.com/p/C3c3Gnxtf2X/",
+    "platform": "instagram",
+    "description": "hyrox circuit workout"
   }
 ]
