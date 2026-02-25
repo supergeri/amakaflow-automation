@@ -1,0 +1,142 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=cMxZr4VVXvg",
+    "platform": "youtube",
+    "workout_type": "circuit",
+    "description": "4 rounds of 4 exercises, 60s work / 30s rest intervals",
+    "expected": { "structure": "circuit" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=T02xXrhEWUU",
+    "platform": "youtube",
+    "workout_type": "circuit",
+    "description": "30 min interval cardio circuit, 60s work / 20s rest",
+    "expected": { "structure": "circuit" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=QU3qvZnaDZ4",
+    "platform": "youtube",
+    "workout_type": "amrap",
+    "description": "10 minute AMRAP bodyweight workout with Alex Crockford",
+    "expected": { "structure": "amrap" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=NlWwXOG8GC0",
+    "platform": "youtube",
+    "workout_type": "amrap",
+    "description": "10 minute AMRAP at-home CrossFit workout",
+    "expected": { "structure": "amrap" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=qb74Gxgt-ew",
+    "platform": "youtube",
+    "workout_type": "emom",
+    "description": "20 min CrossFit EMOM dumbbell workout",
+    "expected": { "structure": "emom" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=L9KI4PHhANA",
+    "platform": "youtube",
+    "workout_type": "emom",
+    "description": "20 minute intermediate dumbbell EMOM strength series",
+    "expected": { "structure": "emom" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=E9utUnOccNM",
+    "platform": "youtube",
+    "workout_type": "superset",
+    "description": "Upper body push/pull superset exercise routine",
+    "expected": { "structure": "superset" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=hgex6LSYsgw",
+    "platform": "youtube",
+    "workout_type": "superset",
+    "description": "30 min upper body superset strength training",
+    "expected": { "structure": "superset" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=rWearms3rFY",
+    "platform": "youtube",
+    "workout_type": "straight_sets",
+    "description": "60 min full body dumbbell strength training, sets and reps",
+    "expected": { "structure": "straight_sets" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Ag7Dui9Plys",
+    "platform": "youtube",
+    "workout_type": "straight_sets",
+    "description": "Total body strength workout, multiple sets per exercise",
+    "expected": { "structure": "straight_sets" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=V85dWJ0iHFM",
+    "platform": "youtube",
+    "workout_type": "for_time",
+    "description": "21-15-9 reps for time: burpees and ball slams",
+    "expected": { "structure": "for_time" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=x8Kwi0uJWDE",
+    "platform": "youtube",
+    "workout_type": "for_time",
+    "description": "CrossFit WOD 21-15-9 for time at home",
+    "expected": { "structure": "for_time" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=cbKkB3POqaY",
+    "platform": "youtube",
+    "workout_type": "ambiguous",
+    "description": "25 min full body HIIT for beginners, no equipment, exercise list",
+    "expected": { "structure": "ambiguous" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Y08OkdVO4Co",
+    "platform": "youtube",
+    "workout_type": "ambiguous",
+    "description": "20 min full body workout at home, no equipment, no clear structure signals",
+    "expected": { "structure": "ambiguous" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=5lLoqzGVjuA",
+    "platform": "youtube",
+    "workout_type": "multi_block",
+    "description": "Full training session: warm up, main workout, and accessories",
+    "expected": { "structure": "multi_block" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=_TGteGZEo0I",
+    "platform": "youtube",
+    "workout_type": "multi_block",
+    "description": "Hybrid workout: HIIT, Tabata, EMOM, AMRAP with warm up and cooldown",
+    "expected": { "structure": "multi_block" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Qg1FoF81Aso",
+    "platform": "youtube",
+    "workout_type": "hyrox",
+    "description": "HYROX-specific running workouts and training breakdown",
+    "expected": { "structure": "hyrox" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=sP_UcL8oH58",
+    "platform": "youtube",
+    "workout_type": "hyrox",
+    "description": "HYROX exercise demo — stations and movements",
+    "expected": { "structure": "hyrox" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=G2hv_NYhM-A",
+    "platform": "youtube",
+    "workout_type": "single_exercise",
+    "description": "How to do burpees with proper form — single exercise tutorial",
+    "expected": { "structure": "single_exercise" }
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=mUYJqe_sJFE",
+    "platform": "youtube",
+    "workout_type": "single_exercise",
+    "description": "Burpee variations for beginners — proper form and progressions",
+    "expected": { "structure": "single_exercise" }
+  }
+]

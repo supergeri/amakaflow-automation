@@ -1,0 +1,193 @@
+name: Workout Import QA
+
+# Required secrets (all already set in repo):
+#   KIMI_API_KEY              - Moonshot AI key for Kimi vision (UI mode)
+#   TELEGRAM_BOT_TOKEN        - Telegram bot token for delivery
+#   TELEGRAM_CHAT_ID          - David's Telegram chat ID
+#   SMTP_USERNAME             - Gmail address for email reports
+#   SMTP_PASSWORD             - Gmail app password
+#   QA_REPORT_EMAIL           - Recipient email for QA reports
+#   GH_PAT                    - GitHub PAT to checkout amakaflow-dev-workspace
+#   SUPABASE_URL              - Supabase project URL
+#   SUPABASE_ANON_KEY         - Supabase anon key
+#   SUPABASE_SERVICE_ROLE_KEY - Supabase service role key
+#   OPENAI_API_KEY            - OpenAI key (for app services)
+#   ANTHROPIC_API_KEY         - Anthropic key (for app services)
+#   APIFY_API_TOKEN           - Apify token (Instagram/TikTok harvesting)
+#   CLERK_PUBLISHABLE_KEY     - Clerk publishable key
+#   CLERK_SECRET_KEY          - Clerk secret key
+#   CLERK_DOMAIN              - Clerk domain
+#   DATABASE_URL              - Direct Postgres connection string
+#   INTERNAL_API_KEY          - Internal service-to-service auth key
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 06:00 UTC nightly
+  workflow_dispatch:       # Manual trigger from GitHub UI
+    inputs:
+      platform:
+        description: 'Filter to one platform (leave empty for all)'
+        required: false
+        default: ''
+      ui_mode:
+        description: 'Use UI mode (Playwright + Kimi vision) instead of API mode'
+        required: false
+        default: 'false'
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/workout_import_qa.py'
+      - 'scripts/test_workout_import_qa.py'
+      - 'fixtures/workout-qa-urls.json'
+      - '.github/workflows/workout-qa.yml'
+
+jobs:
+  harvest:
+    name: Harvest fresh URLs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install harvester dependencies
+        run: pip install yt-dlp apify-client
+
+      - name: Harvest YouTube URLs
+        run: python scripts/workout-url-harvester.py --youtube-only --count 2
+        # Uncomment to also harvest Instagram/TikTok (needs APIFY_API_TOKEN):
+        # env:
+        #   APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+
+      - name: Upload updated seed list
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-seeds-${{ github.run_id }}
+          path: fixtures/workout-qa-urls.json
+          retention-days: 1
+
+  qa:
+    name: Run QA
+    runs-on: ubuntu-latest
+    needs: harvest
+    timeout-minutes: 60
+    outputs:
+      has_issues: ${{ steps.qa.outputs.has_issues }}
+
+    steps:
+      - name: Checkout amakaflow-automation
+        uses: actions/checkout@v4
+
+      - name: Download updated seeds
+        uses: actions/download-artifact@v4
+        with:
+          name: qa-seeds-${{ github.run_id }}
+          path: fixtures/
+
+      - name: Checkout amakaflow-dev-workspace
+        uses: actions/checkout@v4
+        with:
+          repository: supergeri/amakaflow-dev-workspace
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-dev-workspace
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install QA dependencies
+        run: |
+          pip install -r requirements-qa.txt
+          if [ "${{ github.event.inputs.ui_mode }}" = "true" ]; then
+            playwright install chromium --with-deps
+          fi
+
+      - name: Create dev stack .env
+        run: |
+          cat > amakaflow-dev-workspace/.env <<'EOF'
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          APIFY_API_TOKEN=${{ secrets.APIFY_API_TOKEN }}
+          CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_DOMAIN=${{ secrets.CLERK_DOMAIN }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
+          YT_TRANSCRIPT_API_TOKEN=${{ secrets.YT_TRANSCRIPT_API_TOKEN }}
+          EOF
+
+      - name: Start dev stack
+        run: docker compose up -d
+        working-directory: amakaflow-dev-workspace
+
+      - name: Wait for services
+        run: bash scripts/wait-for-services.sh
+
+      - name: Run QA (API mode)
+        id: qa
+        if: github.event.inputs.ui_mode != 'true'
+        env:
+          INGESTOR_BASE_URL: http://localhost:8004
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/workout_import_qa.py \
+            --urls fixtures/workout-qa-urls.json \
+            --timeout 120 \
+            --output artifacts/workout-qa-report.md \
+            ${{ github.event.inputs.platform && format('--platform {0}', github.event.inputs.platform) || '' }}
+        continue-on-error: true
+
+      - name: Run QA (UI mode)
+        id: qa-ui
+        if: github.event.inputs.ui_mode == 'true'
+        env:
+          INGESTOR_BASE_URL: http://localhost:8004
+          UI_BASE_URL: http://localhost:3000
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/workout_import_qa.py \
+            --ui \
+            --urls fixtures/workout-qa-urls.json \
+            --timeout 120 \
+            --output artifacts/workout-qa-report.md
+        continue-on-error: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workout-qa-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 14
+
+      - name: Send email if issues found
+        if: steps.qa.outputs.has_issues == 'true' || steps.qa-ui.outputs.has_issues == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          to: ${{ secrets.QA_REPORT_EMAIL }}
+          from: AmakaFlow QA <${{ secrets.SMTP_USERNAME }}>
+          subject: "⚠️ Workout Import QA — Issues Found (${{ github.run_number }})"
+          body: |
+            Workout import QA found issues in the nightly run.
+
+            View full report and artifacts:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            To review failures interactively:
+              python scripts/workout_import_qa.py --assist
+
+            Artifacts retained for 14 days.
