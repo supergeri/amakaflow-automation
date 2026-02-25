@@ -17,7 +17,7 @@
     "url": "https://www.youtube.com/watch?v=QU3qvZnaDZ4",
     "platform": "youtube",
     "workout_type": "amrap",
-    "description": "10 minute AMRAP bodyweight workout with Alex Crockford",
+    "description": "10 minute AMRAP bodyweight workout",
     "expected": { "structure": "amrap" }
   },
   {
@@ -28,17 +28,17 @@
     "expected": { "structure": "amrap" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=qb74Gxgt-ew",
+    "url": "https://www.youtube.com/watch?v=tCSEYY1RU7M",
     "platform": "youtube",
     "workout_type": "emom",
-    "description": "20 min CrossFit EMOM dumbbell workout",
+    "description": "Caroline Girvan EPIC EMOM — structured every-minute intervals clearly stated in description",
     "expected": { "structure": "emom" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=L9KI4PHhANA",
+    "url": "https://www.youtube.com/watch?v=p1UP_ChjIDg",
     "platform": "youtube",
     "workout_type": "emom",
-    "description": "20 minute intermediate dumbbell EMOM strength series",
+    "description": "Caroline Girvan EMOM dumbbell workout — every minute on the minute structure",
     "expected": { "structure": "emom" }
   },
   {
@@ -56,24 +56,24 @@
     "expected": { "structure": "superset" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=rWearms3rFY",
+    "url": "https://www.youtube.com/watch?v=SCxNnWW2zB8",
     "platform": "youtube",
     "workout_type": "straight_sets",
-    "description": "60 min full body dumbbell strength training, sets and reps",
+    "description": "Caroline Girvan Iron Series Day 1 — sets and reps clearly listed per exercise",
     "expected": { "structure": "straight_sets" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=Ag7Dui9Plys",
+    "url": "https://www.youtube.com/watch?v=0i5RILMI1Mk",
     "platform": "youtube",
     "workout_type": "straight_sets",
-    "description": "Total body strength workout, multiple sets per exercise",
+    "description": "Caroline Girvan Iron Series Day 7 — structured straight sets strength program",
     "expected": { "structure": "straight_sets" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=V85dWJ0iHFM",
+    "url": "https://www.youtube.com/watch?v=tMLooQ3DwqQ",
     "platform": "youtube",
     "workout_type": "for_time",
-    "description": "21-15-9 reps for time: burpees and ball slams",
+    "description": "MetCon — 100 thrusters for time, descending ladder",
     "expected": { "structure": "for_time" }
   },
   {
@@ -87,7 +87,7 @@
     "url": "https://www.youtube.com/watch?v=cbKkB3POqaY",
     "platform": "youtube",
     "workout_type": "ambiguous",
-    "description": "25 min full body HIIT for beginners, no equipment, exercise list",
+    "description": "25 min full body HIIT for beginners, exercise list without clear rep/interval structure",
     "expected": { "structure": "ambiguous" }
   },
   {
@@ -98,31 +98,31 @@
     "expected": { "structure": "ambiguous" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=5lLoqzGVjuA",
+    "url": "https://www.youtube.com/watch?v=KfBcXaeXqjo",
     "platform": "youtube",
     "workout_type": "multi_block",
-    "description": "Full training session: warm up, main workout, and accessories",
+    "description": "Heather Robertson full training session — warm up block, main workout block, cooldown",
     "expected": { "structure": "multi_block" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=_TGteGZEo0I",
+    "url": "https://www.youtube.com/watch?v=Z2nsPZU399I",
     "platform": "youtube",
     "workout_type": "multi_block",
-    "description": "Hybrid workout: HIIT, Tabata, EMOM, AMRAP with warm up and cooldown",
+    "description": "Heather Robertson structured full body — multiple distinct workout blocks",
     "expected": { "structure": "multi_block" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=Qg1FoF81Aso",
+    "url": "https://www.youtube.com/watch?v=69kOw4SwsyM",
     "platform": "youtube",
     "workout_type": "hyrox",
-    "description": "HYROX-specific running workouts and training breakdown",
+    "description": "Official HYROX channel — HYROX race format training with sled, row, ski, sandbag stations",
     "expected": { "structure": "hyrox" }
   },
   {
-    "url": "https://www.youtube.com/watch?v=sP_UcL8oH58",
+    "url": "https://www.youtube.com/watch?v=SkBe0YLKfXw",
     "platform": "youtube",
     "workout_type": "hyrox",
-    "description": "HYROX exercise demo — stations and movements",
+    "description": "Official HYROX workout — functional fitness training with HYROX-specific movements",
     "expected": { "structure": "hyrox" }
   },
   {
