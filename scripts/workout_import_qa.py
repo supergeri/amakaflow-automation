@@ -1,541 +1,832 @@
 #!/usr/bin/env python3
 """
-Workout Import QA Script
+Workout Import QA — automated pipeline quality testing.
 
-Nightly automated QA that imports real workout URLs into the AmakaFlow UI via Playwright,
-screenshots each result, sends the screenshot to Kimi 2.5 vision to judge what looks wrong,
-and sends a Markdown report plus screenshots via Telegram Bot to David (chat ID 7888191549)
-when issues are found.
+Tests the AmakaFlow ingestor against real workout URLs and documents
+what's captured correctly vs. what's wrong or missing.
 
-Phase 1 is observe only — no auto-fix, no Linear ticket creation.
+Modes:
+  Default (API):  Calls POST /ingest/url directly. Fast, structured JSON output.
+  UI mode (--ui): Drives the web app via Playwright, screenshots each result,
+                  uses Kimi vision to judge quality.
+
+Assisted process (--assist):
+  After a run, loads failures/uncertain results and walks through them
+  interactively so you can label expected values for fix tickets.
+
+Usage:
+    # API mode (fast, default)
+    python scripts/workout_import_qa.py
+
+    # UI mode (visual, uses Playwright + Kimi vision)
+    python scripts/workout_import_qa.py --ui
+
+    # Test a single URL
+    python scripts/workout_import_qa.py --url https://youtube.com/watch?v=abc
+
+    # Interactive review of failures from last run
+    python scripts/workout_import_qa.py --assist
+
+    # Harvest fresh URLs then run QA
+    python scripts/workout_import_qa.py --harvest
+
+    # Filter to one platform
+    python scripts/workout_import_qa.py --platform youtube
 """
 
 import argparse
-import asyncio
+import base64
 import json
 import os
-import re
 import sys
 import time
-import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Optional
 
-from openai import OpenAI
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
+import httpx
 
+REPO_ROOT = Path(__file__).parent.parent
+ARTIFACTS_DIR = REPO_ROOT / "artifacts"
+SEEDS_FILE = REPO_ROOT / "fixtures" / "workout-qa-urls.json"
 
-# ============== UTILITY FUNCTIONS ==============
+INGESTOR_BASE_URL = os.environ.get("INGESTOR_BASE_URL", "http://localhost:8004")
+UI_BASE_URL = os.environ.get("UI_BASE_URL", "http://localhost:3000")
+DEFAULT_TIMEOUT = int(os.environ.get("QA_TIMEOUT", "90"))
 
-def validate_url(url: str) -> bool:
-    """
-    Validate that a URL is properly formatted.
-    
-    Args:
-        url: URL string to validate
-        
-    Returns:
-        True if URL is valid, False otherwise
-    """
-    try:
-        result = urllib.parse.urlparse(url)
-        return all([result.scheme, result.netloc]) and result.scheme in ('http', 'https')
-    except Exception:
-        return False
+# Result status values
+STATUS_OK = "ok"
+STATUS_NEEDS_CLARIFICATION = "needs_clarification"
+STATUS_FETCH_ERROR = "fetch_error"
+STATUS_PARSE_ERROR = "parse_error"
+STATUS_UNSUPPORTED = "unsupported_platform"
+STATUS_TIMEOUT = "timeout"
+STATUS_SERVICE_DOWN = "service_down"
+STATUS_IMPORT_FAILED = "import_failed"  # UI mode only
 
 
-def retry_with_backoff(max_retries: int = 3, initial_delay: float = 1.0):
-    """
-    Decorator for retrying functions with exponential backoff.
-    
-    Args:
-        max_retries: Maximum number of retry attempts
-        initial_delay: Initial delay in seconds
-    """
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            delay = initial_delay
-            last_exception = None
-            for attempt in range(max_retries + 1):
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    if attempt < max_retries:
-                        print(f"  Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
-                        await asyncio.sleep(delay)
-                        delay *= 2  # Exponential backoff
-                    else:
-                        print(f"  All {max_retries + 1} attempts failed")
-            raise last_exception
-        return wrapper
-    return decorator
+# ---------------------------------------------------------------------------
+# Pure functions (unit-testable)
+# ---------------------------------------------------------------------------
+
+def classify_api_response(http_status: int, body: dict) -> str:
+    """Map an HTTP status + body to a QA result status."""
+    if http_status == 200:
+        if body.get("needs_clarification"):
+            return STATUS_NEEDS_CLARIFICATION
+        return STATUS_OK
+    if http_status == 400:
+        detail = body.get("detail", "")
+        if "Unsupported URL" in detail or "No adapter" in detail:
+            return STATUS_UNSUPPORTED
+        return STATUS_PARSE_ERROR
+    if http_status == 422:
+        return STATUS_PARSE_ERROR
+    if http_status == 502:
+        return STATUS_FETCH_ERROR
+    return f"http_{http_status}"
 
 
-# ============== PURE FUNCTIONS ==============
-
-def parse_kimi_response(response_text: str) -> dict[str, Any]:
-    """
-    Parse Kimi vision API response to extract status and issues.
-    
-    Args:
-        response_text: Raw response from Kimi vision API
-        
-    Returns:
-        Dictionary with 'status' (ok/issues/error) and 'issues' list
-    """
-    response_lower = response_text.lower()
-
-    # Check for positive "OK" response before looking for error keywords
-    ok_phrases = ["everything looks correct", "looks correct", "no issues", "no errors",
-                  "no problems", "nothing wrong", "looks good", "appears correct",
-                  "^ok$", "all ok", "looks fine"]
-    if any(phrase in response_lower for phrase in ok_phrases):
-        return {"status": "ok", "issues": []}
-
-    # Check for API/system-level error (not UI errors reported by Kimi)
-    if response_lower.startswith("error") or "api error" in response_lower:
-        return {"status": "error", "issues": [response_text]}
-    
-    # Check for issues indicators
-    issues_keywords = ["issue", "problem", "wrong", "broken", "missing", "fail", "error", "blank", "empty"]
-    found_issues = []
-    
-    for keyword in issues_keywords:
-        if keyword in response_lower:
-            # Try to extract the context around the keyword
-            pattern = rf".{{0,100}}{keyword}.{{0,100}}"
-            matches = re.findall(pattern, response_lower, re.IGNORECASE)
-            found_issues.extend(matches)
-    
-    if found_issues:
-        return {"status": "issues", "issues": found_issues[:5]}  # Limit to 5 issues
-    
-    return {"status": "ok", "issues": []}
-
-
-def build_report(results: list[dict[str, Any]]) -> str:
-    """
-    Build Markdown report from QA results.
-    
-    Args:
-        results: List of result dictionaries with url, status, issues, screenshot_path
-        
-    Returns:
-        Markdown formatted report string
-    """
-    total = len(results)
-    ok_count = sum(1 for r in results if r.get("status") == "ok")
-    issues_count = sum(1 for r in results if r.get("status") == "issues")
-    error_count = sum(1 for r in results if r.get("status") == "error")
-    
-    report_lines = [
-        f"# Workout Import QA Report",
-        f"",
-        f"**Generated:** {datetime.utcnow().isoformat()} UTC",
-        f"",
-        f"## Summary",
-        f"",
-        f"| Total | OK | Issues | Failed |",
-        f"|-------|-----|--------|--------|",
-        f"| {total} | {ok_count} | {issues_count} | {error_count} |",
-        f"",
-        f"## Per-URL Findings",
-        f"",
+def extract_fields(body: dict) -> dict:
+    """Pull the key QA fields out of a Workout response dict."""
+    blocks = body.get("blocks", [])
+    structures = [b.get("structure") for b in blocks]
+    rounds = [b.get("rounds") for b in blocks if b.get("rounds")]
+    rest_times = [b.get("rest_between_seconds") for b in blocks if b.get("rest_between_seconds")]
+    exercise_names = [
+        ex.get("name", "")
+        for b in blocks
+        for ex in b.get("exercises", [])
     ]
-    
-    for i, result in enumerate(results, 1):
-        url = result.get("url", "Unknown")
-        status = result.get("status", "unknown")
-        issues = result.get("issues", [])
-        screenshot = result.get("screenshot_path", "")
-        
-        status_emoji = "✅" if status == "ok" else "⚠️" if status == "issues" else "❌"
-        
-        report_lines.append(f"### {i}. {url}")
-        report_lines.append(f"")
-        report_lines.append(f"**Status:** {status_emoji} {status.upper()}")
-        report_lines.append(f"")
-        
-        if issues:
-            report_lines.append(f"**Issues Found:**")
-            for issue in issues:
-                report_lines.append(f"- {issue}")
-            report_lines.append(f"")
-        
-        if screenshot:
-            report_lines.append(f"**Screenshot:** {screenshot}")
-            report_lines.append(f"")
-        
-        report_lines.append(f"---")
-        report_lines.append(f"")
-    
-    return "\n".join(report_lines)
+    confidences = [b.get("structure_confidence") for b in blocks if b.get("structure_confidence") is not None]
 
-
-def set_has_issues_output(results: list[dict[str, Any]], output_path: str = "GITHUB_OUTPUT") -> None:
-    """
-    Write has_issues=true to GITHUB_OUTPUT when any URL has non-ok status.
-    
-    Args:
-        results: List of result dictionaries
-        output_path: Path to GitHub output file
-    """
-    has_issues = any(r.get("status") != "ok" for r in results)
-
-    # Only use GITHUB_OUTPUT env var when called with the default sentinel value
-    if output_path == "GITHUB_OUTPUT":
-        output_path = os.environ.get("GITHUB_OUTPUT", "GITHUB_OUTPUT")
-
-    with open(output_path, "a") as f:
-        f.write(f"has_issues={str(has_issues).lower()}\n")
-
-
-# ============== SIDE-EFFECT FUNCTIONS ==============
-
-async def import_workflow_url(page, url: str, timeout: int = 120) -> dict[str, Any]:
-    """
-    Import a workout URL via the AmakaFlow UI using Playwright.
-    
-    Args:
-        page: Playwright page object
-        url: Workout URL to import
-        timeout: Timeout in seconds
-        
-    Returns:
-        Dictionary with import status and details
-    """
-    result = {"url": url, "status": "unknown", "issues": [], "screenshot_path": ""}
-    
-    # Validate URL format before attempting import
-    if not validate_url(url):
-        result["status"] = "error"
-        result["issues"].append(f"Invalid URL format: {url}")
-        return result
-    
-    try:
-        # Navigate to root — SPA, no URL routing
-        await page.goto("http://localhost:3000", wait_until="networkidle", timeout=30000)
-
-        # Open the Import dropdown in the top nav (exact=True avoids matching "Import URL" button)
-        import_dropdown = page.get_by_role("button", name="Import", exact=True)
-        await import_dropdown.wait_for(state="visible", timeout=15000)
-        await import_dropdown.click()
-
-        # Click "Single Import" from the dropdown
-        await page.get_by_role("menuitem", name="Single Import").click()
-
-        # Wait for the AddSources view — fill the Video URL input
-        # Use 30s timeout for CI environments which may be slower than local
-        url_input = page.get_by_placeholder("Paste YouTube, TikTok, Instagram, or Pinterest URL...")
-        await url_input.wait_for(state="visible", timeout=30000)
-        await url_input.fill(url)
-
-        # Press Enter to add the URL to the sources list
-        await url_input.press("Enter")
-
-        # Wait for the source to be added — Generate Structure button becomes enabled
-        generate_btn = page.get_by_role("button", name="Generate Structure")
-        await generate_btn.wait_for(state="visible", timeout=15000)
-        await page.wait_for_function(
-            """() => {
-                const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim().includes('Generate Structure'));
-                return btn && !btn.disabled;
-            }""",
-            timeout=10000
-        )
-        await generate_btn.click()
-
-        # Wait for generation to finish — "Generating Structure..." text disappears
-        await page.wait_for_function(
-            """() => {
-                const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Generate Structure') || b.textContent.includes('Generating'));
-                // Generation done when no button with Generating text, or button is re-enabled
-                return !btn || !btn.textContent.includes('Generating');
-            }""",
-            timeout=timeout * 1000
-        )
-
-        # Wait for the result to fully render
-        await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(2)
-
-        # Screenshot the structured workout result
-        screenshot_dir = Path("artifacts/screenshots")
-        screenshot_dir.mkdir(parents=True, exist_ok=True)
-
-        safe_name = re.sub(r'[^\w\-_]', '_', url.split('/')[-2] if url.split('/')[-2] else url.split('/')[-1])
-        screenshot_path = screenshot_dir / f"{safe_name}.png"
-
-        await page.screenshot(path=str(screenshot_path), full_page=True)
-        
-        result["screenshot_path"] = str(screenshot_path)
-        
-        if result["status"] == "unknown":
-            result["status"] = "ok"
-            
-    except PlaywrightTimeoutError as e:
-        result["status"] = "error"
-        result["issues"].append(f"Playwright timeout: {str(e)}")
-    except PlaywrightError as e:
-        result["status"] = "error"
-        result["issues"].append(f"Playwright error: {str(e)}")
-    except Exception as e:
-        result["status"] = "error"
-        result["issues"].append(str(e))
-    
-    return result
-
-
-async def analyze_screenshot_with_kimi(screenshot_path: str) -> dict[str, Any]:
-    """
-    Send screenshot to Kimi vision API for analysis.
-    
-    Args:
-        screenshot_path: Path to the screenshot file
-        
-    Returns:
-        Analysis result from Kimi
-    """
-    # Check if screenshot file exists
-    if not os.path.exists(screenshot_path):
-        return {"status": "error", "issues": [f"Screenshot file not found: {screenshot_path}"]}
-    
-    # Check file size before processing (limit to 10MB)
-    file_size = os.path.getsize(screenshot_path)
-    if file_size > 10 * 1024 * 1024:
-        return {"status": "error", "issues": [f"Screenshot file too large: {file_size} bytes (max 10MB)"]}
-    
-    api_key = os.environ.get("MOONSHOT_API_KEY")
-    if not api_key:
-        # No vision API available — skip analysis, don't override import result
-        return {"status": "skipped", "issues": []}
-    
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://api.moonshot.ai/v1"
-    )
-    
-    try:
-        with open(screenshot_path, "rb") as image_file:
-            image_data = image_file.read()
-        
-        return await _call_kimi_api(client, image_data)
-        
-    except Exception as e:
-        return {"status": "error", "issues": [str(e)]}
-
-
-@retry_with_backoff(max_retries=3, initial_delay=1.0)
-async def _call_kimi_api(client: OpenAI, image_data: bytes) -> dict[str, Any]:
-    """
-    Call Kimi vision API with retry logic.
-    
-    Args:
-        client: OpenAI client configured for Kimi
-        image_data: Raw image bytes
-        
-    Returns:
-        Analysis result from Kimi
-    """
-    response = client.chat.completions.create(
-        model="moonshot-v1-8k-vision-preview",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Analyze this screenshot of the AmakaFlow workout import UI. What, if anything, looks wrong? Look for: blank areas, broken layouts, missing data, error messages, or any visual issues. Respond with a brief description of any problems you find, or say 'OK' if everything looks correct."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{__import__('base64').b64encode(image_data).decode()}"
-                        }
-                    }
-                ]
-            }
-        ],
-        max_tokens=300
-    )
-    
-    response_text = response.choices[0].message.content
-    return parse_kimi_response(response_text)
-
-
-def send_telegram_message(bot_token: str, chat_id: str, message: str) -> dict:
-    """
-    Send a message via Telegram Bot API.
-    
-    Args:
-        bot_token: Telegram bot token
-        chat_id: Target chat ID
-        message: Message to send
-        
-    Returns:
-        API response
-    """
-    import requests
-    
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    data = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
+    return {
+        "structures": structures,
+        "rounds": rounds,
+        "rest_between_seconds": rest_times,
+        "exercise_count": len(exercise_names),
+        "exercise_names": exercise_names[:10],  # cap for readability
+        "needs_clarification": body.get("needs_clarification", False),
+        "min_confidence": min(confidences, default=None),
     }
-    
-    response = requests.post(url, json=data)
-    return response.json()
 
 
-def send_telegram_photo(bot_token: str, chat_id: str, photo_path: str, caption: str = "") -> dict:
-    """
-    Send a photo via Telegram Bot API.
-    
-    Args:
-        bot_token: Telegram bot token
-        chat_id: Target chat ID
-        photo_path: Path to photo file
-        caption: Optional caption
-        
-    Returns:
-        API response
-    """
-    import requests
-    
-    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-    data = {
-        "chat_id": chat_id,
-        "caption": caption
-    }
-    
-    with open(photo_path, "rb") as photo:
-        files = {"photo": photo}
-        response = requests.post(url, data=data, files=files)
-    
-    return response.json()
+def check_expected(fields: dict, expected: dict) -> list[str]:
+    """Compare extracted fields against expected values. Returns list of mismatches."""
+    mismatches = []
+
+    expected_structure = expected.get("structure")
+    if expected_structure and expected_structure not in ("ambiguous", "multi_block"):
+        if not any(s == expected_structure for s in fields["structures"]):
+            actual = fields["structures"]
+            mismatches.append(f"Expected structure={expected_structure!r}, got {actual}")
+
+    if expected.get("rounds") and expected["rounds"] not in fields["rounds"]:
+        mismatches.append(f"Expected rounds={expected['rounds']}, got {fields['rounds']}")
+
+    return mismatches
 
 
-def send_telegram_report(report: str, screenshot_paths: list[str], issues_found: bool = True) -> None:
-    """
-    Send QA report and screenshots via Telegram.
-    
-    Args:
-        report: Markdown report text
-        screenshot_paths: List of screenshot file paths
-        issues_found: Whether any issues were found
-    """
-    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "7888191549")
-    
-    if not bot_token:
-        print("WARNING: TELEGRAM_BOT_TOKEN not set, skipping Telegram notification")
-        return
-    
-    # Send the report message
-    send_telegram_message(bot_token, chat_id, report)
-    
-    # Send each screenshot if there are issues
-    if issues_found:
-        for screenshot_path in screenshot_paths:
-            if os.path.exists(screenshot_path):
-                caption = os.path.basename(screenshot_path)
-                send_telegram_photo(bot_token, chat_id, screenshot_path, caption)
+def build_report(results: list[dict], run_date: str, mode: str = "api") -> str:
+    """Build Markdown QA report from result list."""
+    total = len(results)
+    ok = sum(1 for r in results if r["status"] == STATUS_OK)
+    clarification = sum(1 for r in results if r["status"] == STATUS_NEEDS_CLARIFICATION)
+    failed = sum(1 for r in results if r["status"] not in (STATUS_OK, STATUS_NEEDS_CLARIFICATION))
+
+    lines = [
+        f"# Workout Import QA — {run_date}",
+        f"*Mode: {mode}*",
+        "",
+        "## Summary",
+        f"- **Total:** {total} | ✅ OK: {ok} | ⚠️ Needs clarification: {clarification} | ❌ Failed: {failed}",
+        "",
+    ]
+
+    # Per-platform breakdown
+    platforms = {}
+    for r in results:
+        p = r.get("platform", "unknown")
+        platforms.setdefault(p, {"ok": 0, "clarification": 0, "failed": 0})
+        if r["status"] == STATUS_OK:
+            platforms[p]["ok"] += 1
+        elif r["status"] == STATUS_NEEDS_CLARIFICATION:
+            platforms[p]["clarification"] += 1
+        else:
+            platforms[p]["failed"] += 1
+
+    lines.append("## By Platform")
+    lines.append("")
+    lines.append("| Platform | ✅ OK | ⚠️ Clarification | ❌ Failed |")
+    lines.append("|----------|------|-----------------|----------|")
+    for platform, counts in sorted(platforms.items()):
+        lines.append(f"| {platform} | {counts['ok']} | {counts['clarification']} | {counts['failed']} |")
+    lines.append("")
+
+    # Per-workout-type breakdown
+    wtypes = {}
+    for r in results:
+        wt = r.get("workout_type", "unknown")
+        wtypes.setdefault(wt, [])
+        wtypes[wt].append(r["status"])
+
+    lines.append("## By Workout Type")
+    lines.append("")
+    lines.append("| Type | Result |")
+    lines.append("|------|--------|")
+    for wtype, statuses in sorted(wtypes.items()):
+        icons = " ".join("✅" if s == STATUS_OK else ("⚠️" if s == STATUS_NEEDS_CLARIFICATION else "❌") for s in statuses)
+        lines.append(f"| {wtype} | {icons} |")
+    lines.append("")
+
+    lines.append("## Results")
+    lines.append("")
+
+    for r in results:
+        status = r["status"]
+        if status == STATUS_OK:
+            icon = "✅"
+        elif status == STATUS_NEEDS_CLARIFICATION:
+            icon = "⚠️"
+        else:
+            icon = "❌"
+
+        lines.append(f"### {icon} [{r.get('workout_type', 'unknown')}] {r.get('platform', '')} — {r.get('description', '')}")
+        lines.append(f"**URL:** {r['url']}")
+        lines.append(f"**Status:** `{status}`")
+
+        if r.get("latency_ms"):
+            lines.append(f"**Latency:** {r['latency_ms']}ms")
+
+        if r.get("fields"):
+            f = r["fields"]
+            lines.append(f"**Structures:** {f['structures']}")
+            if f["rounds"]:
+                lines.append(f"**Rounds:** {f['rounds']}")
+            if f["rest_between_seconds"]:
+                lines.append(f"**Rest:** {f['rest_between_seconds']}s")
+            lines.append(f"**Exercises:** {f['exercise_count']} ({', '.join(f['exercise_names'][:5])}{'...' if f['exercise_count'] > 5 else ''})")
+            if f["min_confidence"] is not None:
+                lines.append(f"**Min confidence:** {f['min_confidence']:.2f}")
+
+        if r.get("mismatches"):
+            lines.append("**Mismatches:**")
+            for m in r["mismatches"]:
+                lines.append(f"- ⚠️ {m}")
+
+        if r.get("error"):
+            lines.append(f"**Error:** {r['error']}")
+
+        if r.get("screenshot_path"):
+            lines.append(f"**Screenshot:** {r['screenshot_path']}")
+
+        if r.get("findings"):
+            lines.append("**Visual findings:**")
+            for finding in r["findings"]:
+                lines.append(f"- {finding}")
+
+        lines.append("")
+
+    # Patterns section — aggregate observations
+    all_mismatches = [m for r in results for m in r.get("mismatches", [])]
+    parse_errors = [r for r in results if r["status"] == STATUS_PARSE_ERROR]
+    unsupported = [r for r in results if r["status"] == STATUS_UNSUPPORTED]
+
+    if all_mismatches or parse_errors or unsupported:
+        lines.append("## Patterns / Action Items")
+        lines.append("")
+        if parse_errors:
+            lines.append(f"- **{len(parse_errors)} parse failures** — LLM could not extract workout structure")
+        if unsupported:
+            lines.append(f"- **{len(unsupported)} unsupported URLs** — URL pattern not registered (see AMA-750)")
+        if all_mismatches:
+            lines.append(f"- **{len(all_mismatches)} field mismatches** vs expected values:")
+            for m in all_mismatches[:10]:
+                lines.append(f"  - {m}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
-# ============== MAIN ORCHESTRATION ==============
+def set_has_issues_output(results: list[dict]) -> None:
+    """Write GitHub Actions output variable `has_issues`."""
+    has_issues = any(r["status"] != STATUS_OK for r in results)
+    value = "true" if has_issues else "false"
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with open(github_output, "a") as f:
+            f.write(f"has_issues={value}\n")
+    else:
+        print(f"[qa] has_issues={value}")
 
-async def run_qa(urls: list[str], headed: bool = False, timeout: int = 120) -> list[dict[str, Any]]:
-    """
-    Run the full QA workflow.
-    
-    Args:
-        urls: List of workout URLs to test
-        headed: Whether to run browser in headed mode
-        timeout: Timeout per URL in seconds
-        
-    Returns:
-        List of results
-    """
+
+def parse_kimi_response(raw: str) -> dict:
+    """Parse Kimi vision JSON response into normalised dict."""
+    try:
+        data = json.loads(raw)
+        return {
+            "status": data.get("status", "ok"),
+            "findings": data.get("findings", []),
+        }
+    except (json.JSONDecodeError, AttributeError) as e:
+        return {
+            "status": "parse_error",
+            "findings": [f"Could not parse Kimi response: {e}. Raw: {raw[:200]}"],
+        }
+
+
+# ---------------------------------------------------------------------------
+# API mode: call ingestor directly
+# ---------------------------------------------------------------------------
+
+def ingest_via_api(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
+    """Call POST /ingest/url and return a QA result dict."""
+    start = time.monotonic()
+    try:
+        resp = httpx.post(
+            f"{INGESTOR_BASE_URL}/ingest/url",
+            json={"url": url, "user_id": "qa-bot"},
+            timeout=timeout,
+        )
+        latency_ms = int((time.monotonic() - start) * 1000)
+        body = {}
+        try:
+            body = resp.json()
+        except Exception:
+            pass
+
+        status = classify_api_response(resp.status_code, body)
+        fields = extract_fields(body) if resp.status_code == 200 else {}
+        error = body.get("detail") if resp.status_code != 200 else None
+
+        return {
+            "status": status,
+            "fields": fields,
+            "error": error,
+            "http_status": resp.status_code,
+            "latency_ms": latency_ms,
+            "raw_response": body if resp.status_code != 200 else None,
+        }
+
+    except httpx.TimeoutException:
+        return {"status": STATUS_TIMEOUT, "error": f"No response within {timeout}s", "fields": {}}
+    except httpx.ConnectError:
+        return {"status": STATUS_SERVICE_DOWN, "error": f"Cannot connect to {INGESTOR_BASE_URL}", "fields": {}}
+
+
+def run_api_mode(
+    url_entries: list[dict],
+    timeout: int = DEFAULT_TIMEOUT,
+) -> list[dict]:
+    """Run QA in API mode — fast, structured, no browser needed."""
     results = []
-    
-    async with async_playwright() as p:
-        # Launch browser
-        launch_options = {"headless": not headed}
-        browser = await p.chromium.launch(**launch_options)
-        
-        context = await browser.new_context(viewport={"width": 1920, "height": 1080})
-        page = await context.new_page()
-        
-        for url in urls:
-            print(f"Testing URL: {url}")
-            
-            # Import the URL
-            result = await import_workflow_url(page, url, timeout)
-            
-            # Analyze screenshot with Kimi if we have one
-            if result.get("screenshot_path"):
-                print(f"  Analyzing screenshot with Kimi...")
-                analysis = await analyze_screenshot_with_kimi(result["screenshot_path"])
-                kimi_status = analysis.get("status")
-                # Only update status when Kimi returned a real result (not skipped/error from missing key)
-                if kimi_status and kimi_status not in ("skipped",):
-                    result["status"] = kimi_status
-                result["issues"].extend(analysis.get("issues", []))
-            
-            print(f"  Status: {result['status']}")
-            results.append(result)
-        
-        await browser.close()
-    
+
+    for entry in url_entries:
+        url = entry["url"]
+        platform = entry.get("platform", "unknown")
+        workout_type = entry.get("workout_type", "unknown")
+        description = entry.get("description", "")
+        expected = entry.get("expected", {})
+
+        print(f"  [{workout_type}] {platform}: {url[:80]}", end=" ... ", flush=True)
+        result = ingest_via_api(url, timeout=timeout)
+
+        mismatches = check_expected(result.get("fields", {}), expected) if result["fields"] else []
+
+        icon = "✅" if result["status"] == STATUS_OK and not mismatches else (
+            "⚠️" if result["status"] == STATUS_NEEDS_CLARIFICATION else "❌"
+        )
+        latency = f"{result.get('latency_ms', 0)}ms"
+        print(f"{icon} {result['status']} ({latency})")
+
+        if mismatches:
+            for m in mismatches:
+                print(f"    ⚠️  {m}")
+
+        results.append({
+            "url": url,
+            "platform": platform,
+            "workout_type": workout_type,
+            "description": description,
+            "expected": expected,
+            "status": result["status"],
+            "fields": result.get("fields", {}),
+            "mismatches": mismatches,
+            "error": result.get("error"),
+            "http_status": result.get("http_status"),
+            "latency_ms": result.get("latency_ms"),
+        })
+
     return results
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Workout Import QA Script")
-    parser.add_argument("--urls", required=True, help="Path to JSON file with workout URLs")
-    parser.add_argument("--headed", action="store_true", help="Run browser in headed mode")
-    parser.add_argument("--timeout", type=int, default=120, help="Timeout per URL in seconds")
-    parser.add_argument("--output", default="artifacts/workout-qa-report.md", help="Output report path")
-    
+# ---------------------------------------------------------------------------
+# UI mode: Playwright + Kimi vision
+# ---------------------------------------------------------------------------
+
+def judge_screenshot(screenshot_path: Path, description: str, platform: str, kimi_api_key: str) -> dict:
+    """Send screenshot to Kimi 2.5 vision and return structured findings."""
+    from openai import OpenAI
+
+    client = OpenAI(api_key=kimi_api_key, base_url="https://api.moonshot.cn/v1")
+    with open(screenshot_path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
+
+    prompt = (
+        f'You are reviewing a workout import result in the AmakaFlow web app.\n\n'
+        f'Context: The user imported a "{description}" from {platform}.\n\n'
+        f"Look at this screenshot and identify any issues:\n"
+        f"1. Does the workout structure match what was described?\n"
+        f"   (e.g. EMOM labelled as Circuit, superset shown as straight sets)\n"
+        f"2. Are exercise names reasonable and complete? Any obviously wrong names?\n"
+        f"3. Are any metrics obviously wrong?\n"
+        f"   (e.g. missing reps/sets when they should be present)\n"
+        f"4. Are there any visible errors, loading spinners, or empty states?\n\n"
+        f"Be concise. Only report actual problems, not stylistic preferences.\n\n"
+        f'Return JSON only, no markdown:\n'
+        f'{{"status": "ok" or "issues_found", "findings": ["finding 1", "finding 2"]}}'
+    )
+
+    response = client.chat.completions.create(
+        model="moonshot-v1-vision-preview",
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+        temperature=0.1,
+        max_tokens=512,
+    )
+    raw = response.choices[0].message.content or ""
+    return parse_kimi_response(raw)
+
+
+def import_url_via_ui(page, url: str, screenshot_path: Path, timeout_sec: int) -> dict:
+    """Drive the AmakaFlow UI to import a URL and screenshot the result."""
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+    except ImportError:
+        return {"status": STATUS_IMPORT_FAILED, "error": "playwright not installed"}
+
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+        page.goto(UI_BASE_URL, wait_until="domcontentloaded")
+        page.wait_for_load_state("networkidle", timeout=15_000)
+        page.get_by_text("Import URL", exact=True).click()
+        page.wait_for_selector('[data-testid="import-url-input"]', timeout=10_000)
+        page.fill('[data-testid="import-url-input"]', url)
+        page.click('[data-testid="import-url-submit"]')
+        page.wait_for_selector(
+            '[data-testid="import-url-submit"]:has-text("Importing")', timeout=10_000
+        )
+        page.wait_for_selector(
+            '[data-testid="import-url-submit"]:has-text("Import")',
+            timeout=timeout_sec * 1_000,
+        )
+        page.wait_for_timeout(1_500)
+        screenshot_path.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(screenshot_path), full_page=True)
+        return {"status": STATUS_OK, "error": None}
+
+    except Exception as e:
+        try:
+            screenshot_path.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(screenshot_path), full_page=True)
+        except Exception:
+            pass
+        return {"status": STATUS_IMPORT_FAILED, "error": str(e)}
+
+
+def run_ui_mode(
+    url_entries: list[dict],
+    timeout: int = DEFAULT_TIMEOUT,
+    headed: bool = False,
+    kimi_api_key: Optional[str] = None,
+) -> list[dict]:
+    """Run QA in UI mode — Playwright browser + Kimi vision judgment."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("ERROR: playwright not installed. Run: pip install playwright && playwright install chromium", file=sys.stderr)
+        sys.exit(1)
+
+    if not kimi_api_key:
+        print("ERROR: KIMI_API_KEY not set (required for UI mode)", file=sys.stderr)
+        sys.exit(1)
+
+    results = []
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=not headed)
+        context = browser.new_context(viewport={"width": 1280, "height": 900})
+
+        for entry in url_entries:
+            url = entry["url"]
+            platform = entry.get("platform", "unknown")
+            workout_type = entry.get("workout_type", "unknown")
+            description = entry.get("description", "")
+
+            slug = (url.split("/")[-1] or url.split("/")[-2])[:20]
+            ts = int(time.time())
+            screenshot_path = ARTIFACTS_DIR / "screenshots" / f"{platform}-{slug}-{ts}.png"
+
+            print(f"  [{workout_type}] {platform}: {url[:70]}", end=" ... ", flush=True)
+            page = context.new_page()
+            import_result = import_url_via_ui(page, url, screenshot_path, timeout)
+            page.close()
+
+            if import_result["status"] == STATUS_IMPORT_FAILED:
+                print(f"❌ {import_result['error'][:60]}")
+                results.append({
+                    "url": url, "platform": platform, "workout_type": workout_type,
+                    "description": description, "status": STATUS_IMPORT_FAILED,
+                    "error": import_result["error"],
+                    "screenshot_path": str(screenshot_path), "findings": [],
+                })
+                continue
+
+            judgment = judge_screenshot(screenshot_path, description, platform, kimi_api_key)
+            icon = "✅" if judgment["status"] == "ok" else "⚠️"
+            print(f"{icon} {judgment['status']}")
+
+            results.append({
+                "url": url, "platform": platform, "workout_type": workout_type,
+                "description": description,
+                "status": judgment["status"],
+                "findings": judgment["findings"],
+                "screenshot_path": str(screenshot_path),
+                "fields": {}, "mismatches": [], "error": None,
+            })
+
+        browser.close()
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Assisted process — interactive review of failures
+# ---------------------------------------------------------------------------
+
+def run_assist_mode(failures_file: Optional[Path] = None) -> None:
+    """
+    Interactive CLI for reviewing failed/uncertain ingestions.
+
+    Walks through each case and lets you:
+    - Label the expected structure (becomes ground truth for fix tickets)
+    - Mark dead URLs for removal from seed list
+    - Note known issues
+    - Flag false positives
+    """
+    # Find the most recent failures file if not specified
+    if failures_file is None:
+        candidates = sorted(ARTIFACTS_DIR.glob("workout-qa-failures-*.json"), reverse=True)
+        if not candidates:
+            print("No failures file found. Run the QA script first.")
+            print(f"Expected files matching: {ARTIFACTS_DIR}/workout-qa-failures-*.json")
+            return
+        failures_file = candidates[0]
+        print(f"Using most recent failures file: {failures_file.name}")
+
+    with open(failures_file) as f:
+        data = json.load(f)
+
+    cases = data.get("cases", [])
+    if not cases:
+        print("No cases to review — all clear! ✅")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"ASSISTED REVIEW — {len(cases)} cases")
+    print(f"From run: {data.get('run_date', 'unknown')}")
+    print("Your input becomes ground truth for fix tickets.")
+    print(f"{'='*60}\n")
+
+    reviewed = []
+    seeds_to_remove = []
+
+    for i, case in enumerate(cases, 1):
+        url = case["url"]
+        platform = case.get("platform", "?")
+        wtype = case.get("workout_type", "?")
+        status = case["status"]
+        description = case.get("description", "")
+        fields = case.get("fields", {})
+
+        print(f"\n[{i}/{len(cases)}] {wtype.upper()} — {platform}")
+        print(f"  URL: {url}")
+        print(f"  Description: {description}")
+        print(f"  Status: {status}")
+
+        if status == STATUS_NEEDS_CLARIFICATION:
+            print(f"  Structures returned: {fields.get('structures', [])}")
+            print(f"  Min confidence: {fields.get('min_confidence', 'N/A')}")
+            print(f"  Exercises ({fields.get('exercise_count', 0)}): {', '.join(fields.get('exercise_names', [])[:5])}")
+
+        elif status in (STATUS_FETCH_ERROR, STATUS_TIMEOUT, STATUS_IMPORT_FAILED):
+            print(f"  Error: {case.get('error', 'none')}")
+
+        elif status == STATUS_PARSE_ERROR:
+            print(f"  Error: {case.get('error', 'none')}")
+
+        elif status == STATUS_UNSUPPORTED:
+            print(f"  Error: URL pattern not recognised by ingestor")
+
+        if case.get("mismatches"):
+            print(f"  Mismatches vs expected:")
+            for m in case["mismatches"]:
+                print(f"    ⚠️  {m}")
+
+        if case.get("screenshot_path") and Path(case["screenshot_path"]).exists():
+            print(f"  Screenshot: {case['screenshot_path']}")
+
+        print()
+
+        # Build option menu based on status
+        options = {}
+        print("  Options:")
+        print("    [s] Skip (not a real issue)")
+
+        if status in (STATUS_FETCH_ERROR, STATUS_TIMEOUT, STATUS_IMPORT_FAILED):
+            print("    [d] Dead URL — remove from seed list")
+            print("    [r] Retry issue — keep, mark for retry")
+            options.update({"d": "dead_url", "r": "retry"})
+
+        if status == STATUS_PARSE_ERROR:
+            print("    [b] Bug — paste this into a Linear ticket")
+            print("    [e] Enter expected structure for ground truth")
+            options.update({"b": "bug", "e": "enter_expected"})
+
+        if status == STATUS_NEEDS_CLARIFICATION:
+            print("    [c] Correct — structure was actually right (false positive)")
+            print("    [w] Wrong — enter the correct expected structure")
+            options.update({"c": "correct", "w": "wrong_structure"})
+
+        if status == STATUS_UNSUPPORTED:
+            print("    [u] Unsupported — feeds into AMA-750 (URL pattern fixes)")
+            options["u"] = "unsupported_noted"
+
+        print("    [k] Known issue — add a note and skip")
+        options.update({"s": "skip", "k": "known_issue"})
+
+        print()
+        while True:
+            choice = input("  Choice: ").strip().lower()
+            if choice in options or choice in ("s", "k"):
+                break
+            print(f"  Invalid choice. Options: {', '.join(sorted({**options, 's': '', 'k': ''}.keys()))}")
+
+        entry = {**case, "review": {"action": options.get(choice, choice), "timestamp": datetime.utcnow().isoformat()}}
+
+        if choice == "d":
+            seeds_to_remove.append(url)
+            print("  → Marked for removal from seed list")
+
+        elif choice == "w":
+            structures = "circuit/amrap/emom/superset/straight_sets/for_time/ambiguous/multi_block/hyrox/single_exercise"
+            expected = input(f"  Expected structure [{structures}]: ").strip()
+            entry["review"]["expected_structure"] = expected
+            print(f"  → Labeled: {expected}")
+
+        elif choice == "e":
+            structures = "circuit/amrap/emom/superset/straight_sets/for_time/ambiguous/multi_block/hyrox/single_exercise"
+            expected = input(f"  Expected structure [{structures}]: ").strip()
+            entry["review"]["expected_structure"] = expected
+            rounds_str = input("  Rounds (leave blank if N/A): ").strip()
+            if rounds_str:
+                entry["review"]["expected_rounds"] = int(rounds_str) if rounds_str.isdigit() else rounds_str
+            print(f"  → Ground truth recorded")
+
+        elif choice == "b":
+            print("  → Bug report template:")
+            print(f"     URL: {url}")
+            print(f"     Platform: {platform}")
+            print(f"     Expected: {case.get('expected', {})}")
+            print(f"     Error: {case.get('error', '')}")
+            input("  (Press Enter to continue)")
+
+        elif choice == "k":
+            note = input("  Note: ").strip()
+            entry["review"]["note"] = note
+
+        reviewed.append(entry)
+
+    # Save reviewed results
+    date_str = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    out_file = ARTIFACTS_DIR / f"workout-qa-assisted-{date_str}.json"
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    with open(out_file, "w") as f:
+        json.dump({
+            "reviewed_at": datetime.utcnow().isoformat(),
+            "source_file": str(failures_file),
+            "cases": reviewed,
+        }, f, indent=2)
+
+    print(f"\n✅ Saved {len(reviewed)} reviewed cases to {out_file.name}")
+
+    # Offer to clean dead URLs from seed list
+    if seeds_to_remove and SEEDS_FILE.exists():
+        print(f"\n{len(seeds_to_remove)} URL(s) marked as dead.")
+        remove = input("Remove them from the seed list? [y/N]: ").strip().lower()
+        if remove == "y":
+            with open(SEEDS_FILE) as f:
+                seeds = json.load(f)
+            before = len(seeds)
+            seeds = [s for s in seeds if s["url"] not in seeds_to_remove]
+            with open(SEEDS_FILE, "w") as f:
+                json.dump(seeds, f, indent=2)
+            print(f"Removed {before - len(seeds)} URLs from seed list.")
+
+    # Summary
+    actions = {}
+    for r in reviewed:
+        a = r["review"]["action"]
+        actions[a] = actions.get(a, 0) + 1
+    print("\nReview summary:")
+    for action, count in sorted(actions.items()):
+        print(f"  {action}: {count}")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Telegram delivery (from Joshua's implementation — already configured)
+# ---------------------------------------------------------------------------
+
+def send_telegram_report(report: str, screenshot_paths: list[str]) -> None:
+    """Send QA report and issue screenshots via Telegram Bot."""
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "7888191549")
+    if not bot_token:
+        return
+
+    # Truncate report to Telegram's 4096 char limit
+    message = report[:4000] + ("…" if len(report) > 4000 else "")
+    httpx.post(
+        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+        json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"},
+        timeout=10,
+    )
+    for path in screenshot_paths:
+        if Path(path).exists():
+            with open(path, "rb") as f:
+                httpx.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendPhoto",
+                    data={"chat_id": chat_id, "caption": Path(path).name},
+                    files={"photo": f},
+                    timeout=15,
+                )
+
+
+def load_url_entries(seeds_file: Path, platform_filter: Optional[str] = None) -> list[dict]:
+    if not seeds_file.exists():
+        print(f"No seed file found at {seeds_file}", file=sys.stderr)
+        print("Run: python scripts/workout-url-harvester.py --youtube-only", file=sys.stderr)
+        sys.exit(1)
+    with open(seeds_file) as f:
+        entries = json.load(f)
+    if platform_filter:
+        entries = [e for e in entries if e.get("platform") == platform_filter]
+    return entries
+
+
+def save_failures(results: list[dict], run_date: str) -> Optional[Path]:
+    """Save failures + needs_clarification cases for --assist mode."""
+    cases = [r for r in results if r["status"] not in (STATUS_OK,)]
+    if not cases:
+        return None
+    date_str = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    out_file = ARTIFACTS_DIR / f"workout-qa-failures-{date_str}.json"
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    with open(out_file, "w") as f:
+        json.dump({"run_date": run_date, "cases": cases}, f, indent=2)
+    return out_file
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Workout Import QA")
+    parser.add_argument("--ui", action="store_true", help="Use UI mode (Playwright + Kimi vision)")
+    parser.add_argument("--assist", action="store_true", help="Interactive review of failures from last run")
+    parser.add_argument("--harvest", action="store_true", help="Run URL harvester before QA")
+    parser.add_argument("--url", help="Test a single URL")
+    parser.add_argument("--platform", help="Filter to one platform (youtube/instagram/tiktok)")
+    parser.add_argument("--urls", default=str(SEEDS_FILE), help="Path to URL seed file")
+    parser.add_argument("--output", default=str(ARTIFACTS_DIR / "workout-qa-report.md"))
+    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
+    parser.add_argument("--headed", action="store_true", help="UI mode: headed browser")
     args = parser.parse_args()
-    
-    # Load URLs
-    with open(args.urls, "r") as f:
-        urls_data = json.load(f)
-    
-    urls = [item["url"] for item in urls_data]
-    
-    # Run QA
-    results = asyncio.run(run_qa(urls, args.headed, args.timeout))
-    
-    # Build report
-    report = build_report(results)
-    
-    # Save report
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    with open(args.output, "w") as f:
-        f.write(report)
-    
-    print(f"\nReport saved to: {args.output}")
-    
-    # Set GitHub output
+
+    if args.assist:
+        run_assist_mode()
+        return
+
+    if args.harvest:
+        import subprocess
+        harvester = Path(__file__).parent / "workout-url-harvester.py"
+        subprocess.run([sys.executable, str(harvester), "--youtube-only"], check=True)
+
+    run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    # Single URL mode
+    if args.url:
+        url_entries = [{
+            "url": args.url,
+            "platform": "unknown",
+            "workout_type": "unknown",
+            "description": "ad-hoc test URL",
+            "expected": {},
+        }]
+    else:
+        url_entries = load_url_entries(Path(args.urls), platform_filter=args.platform)
+
+    print(f"\n🏋️  Workout Import QA — {run_date}")
+    print(f"Mode: {'UI (Playwright + Kimi)' if args.ui else 'API'}")
+    print(f"URLs: {len(url_entries)} | Timeout: {args.timeout}s")
+    print()
+
+    if args.ui:
+        kimi_api_key = os.environ.get("KIMI_API_KEY")
+        results = run_ui_mode(url_entries, timeout=args.timeout, headed=args.headed, kimi_api_key=kimi_api_key)
+        mode = "ui"
+    else:
+        results = run_api_mode(url_entries, timeout=args.timeout)
+        mode = "api"
+
+    # Write report
+    report = build_report(results, run_date=run_date, mode=mode)
+    output_file = Path(args.output)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(report)
+
+    # Save failures for --assist
+    failures_file = save_failures(results, run_date)
+
+    # GitHub Actions output
     set_has_issues_output(results)
-    
-    # Send Telegram notification if there are issues
-    has_issues = any(r.get("status") != "ok" for r in results)
-    if has_issues:
-        screenshot_paths = [r.get("screenshot_path", "") for r in results if r.get("screenshot_path")]
-        send_telegram_report(report, screenshot_paths, has_issues)
-        print("Telegram notification sent!")
-    
-    # Return exit code based on results
-    sys.exit(0 if not has_issues else 1)
+
+    # Telegram notification if issues found
+    if bad > 0:
+        screenshot_paths = [r["screenshot_path"] for r in results if r.get("screenshot_path")]
+        send_telegram_report(report, screenshot_paths)
+
+    # Summary
+    ok = sum(1 for r in results if r["status"] == STATUS_OK)
+    bad = len(results) - ok
+    print(f"\n{'='*60}")
+    print(f"✅ OK: {ok}  |  ❌/⚠️ Issues: {bad}  |  Total: {len(results)}")
+    print(f"Report: {output_file}")
+    if failures_file:
+        print(f"Failures: {failures_file.name}")
+        print(f"\nTo review failures interactively:")
+        print(f"  python scripts/workout_import_qa.py --assist")
+    print()
+
+    sys.exit(1 if bad > 0 else 0)
 
 
 if __name__ == "__main__":
     main()
-
-
