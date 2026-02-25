@@ -94,6 +94,13 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           path: amakaflow-dev-workspace
 
+      - name: Checkout amakaflow-backend
+        uses: actions/checkout@v4
+        with:
+          repository: Amakaflow/amakaflow-backend
+          token: ${{ secrets.GH_PAT }}
+          path: amakaflow-backend
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -120,14 +127,34 @@ jobs:
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
           YT_TRANSCRIPT_API_TOKEN=${{ secrets.YT_TRANSCRIPT_API_TOKEN }}
+          BYPASS_TIER_GATE=true
+          API_KEYS=sk_qa_runner
           EOF
 
       - name: Start dev stack
-        run: docker compose up -d
+        # Only start the services QA needs — skips UI/chat/calendar build time
+        run: docker compose up -d workout-ingestor mapper
         working-directory: amakaflow-dev-workspace
 
       - name: Wait for services
-        run: bash scripts/wait-for-services.sh
+        run: |
+          echo "Waiting for ingestor (8004) and mapper (8001)..."
+          for port in 8004 8001; do
+            elapsed=0
+            until curl -sf http://localhost:${port}/health > /dev/null 2>&1; do
+              if [ $elapsed -ge 120 ]; then
+                echo "ERROR: localhost:${port} not ready after 120s"
+                docker compose logs --tail=50
+                exit 1
+              fi
+              echo "  Waiting for :${port}... (${elapsed}s)"
+              sleep 3
+              elapsed=$((elapsed + 3))
+            done
+            echo "  :${port} ready!"
+          done
+          echo "All QA services ready."
+        working-directory: amakaflow-dev-workspace
 
       - name: Run QA (API mode)
         id: qa
@@ -168,6 +195,11 @@ jobs:
           name: workout-qa-${{ github.run_id }}
           path: artifacts/
           retention-days: 14
+
+      - name: Stop dev stack
+        if: always()
+        run: docker compose down
+        working-directory: amakaflow-dev-workspace
 
       - name: Send email if issues found
         if: steps.qa.outputs.has_issues == 'true' || steps.qa-ui.outputs.has_issues == 'true'
