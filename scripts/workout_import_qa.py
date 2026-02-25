@@ -280,11 +280,13 @@ def parse_kimi_response(raw: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def ingest_via_api(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
-    """Call POST /ingest/url and return a QA result dict."""
+    """Call POST /ingest/youtube for YouTube URLs, /ingest/url for everything else."""
     start = time.monotonic()
+    is_youtube = "youtube.com" in url or "youtu.be" in url
+    endpoint = "/ingest/youtube" if is_youtube else "/ingest/url"
     try:
         resp = httpx.post(
-            f"{INGESTOR_BASE_URL}/ingest/url",
+            f"{INGESTOR_BASE_URL}{endpoint}",
             json={"url": url, "user_id": "qa-bot"},
             timeout=timeout,
         )
