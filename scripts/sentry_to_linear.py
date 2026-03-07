@@ -107,7 +107,7 @@ def fetch_sentry_issues(since: datetime) -> list[dict]:
     seen_ids: set[str] = set()
     all_issues: list[dict] = []
 
-    base_params: dict = {"limit": 100, "sort": "date"}
+    base_params: dict = {"limit": 100, "sort": "date", "environment": "production"}
     if SENTRY_PROJECTS:
         base_params["project"] = SENTRY_PROJECTS
 
