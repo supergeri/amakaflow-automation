@@ -18,7 +18,7 @@ function parseFailureBlock(commentBody: string): {
   if (!commentBody.includes("FAILURE_CONTEXT_START")) return null;
 
   const match = commentBody.match(
-    /FAILURE_CONTEXT_START\n([\s\S]*?)\nFAILURE_CONTEXT_END/
+    /FAILURE_CONTEXT_START\r?\n([\s\S]*?)\r?\n\s*FAILURE_CONTEXT_END/
   );
   if (!match) return null;
 
@@ -142,6 +142,32 @@ FAILURE_CONTEXT_END -->`;
     const result = parseFailureBlock(minimal);
     expect(result).not.toBeNull();
     expect(result!.failedStep).toBe("build");
+    expect(result!.retryCount).toBe(1);
+  });
+
+  it("parses structured block with leading whitespace (as produced by action.yml)", () => {
+    const body = `
+CI failed on step: build
+
+\`\`\`
+error: cannot find module 'foo'
+\`\`\`
+
+        <!-- FAILURE_CONTEXT_START
+        failed_step: build
+        branch_name: agent/AMA-123-fix-bug
+        run_url: https://github.com/Amakaflow/amakaflow-backend/actions/runs/999
+        retry_count: 1
+        FAILURE_CONTEXT_END -->
+  `;
+
+    const result = parseFailureBlock(body);
+    expect(result).not.toBeNull();
+    expect(result!.failedStep).toBe("build");
+    expect(result!.branchName).toBe("agent/AMA-123-fix-bug");
+    expect(result!.runUrl).toBe(
+      "https://github.com/Amakaflow/amakaflow-backend/actions/runs/999"
+    );
     expect(result!.retryCount).toBe(1);
   });
 });

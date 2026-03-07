@@ -294,6 +294,7 @@ export class LinearClient {
             comments(
               first: 10
               orderBy: createdAt
+              orderDirection: Descending
             ) {
               nodes {
                 body
@@ -308,15 +309,15 @@ export class LinearClient {
       return null;
     }
 
-    // Comments come back oldest-first from Linear; reverse to get newest first
-    const comments = [...data.issue.comments.nodes].reverse();
+    // Comments come back newest-first (orderDirection: Descending); no reverse needed
+    const comments = data.issue.comments.nodes;
 
     for (const comment of comments) {
       if (!comment.body.includes("FAILURE_CONTEXT_START")) continue;
 
       // Extract content between markers
       const match = comment.body.match(
-        /FAILURE_CONTEXT_START\n([\s\S]*?)\nFAILURE_CONTEXT_END/
+        /FAILURE_CONTEXT_START\r?\n([\s\S]*?)\r?\n\s*FAILURE_CONTEXT_END/
       );
       if (!match) continue;
 
